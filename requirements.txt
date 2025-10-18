@@ -1,0 +1,14 @@
+python-dotenv==1.0.0
+torch==2.9.0
+faiss-cpu==1.12.0
+sqlalchemy
+requests
+langchain
+pandas
+scikit-learn
+openai==1.76.0
+numpy==2.3.4
+google-genai
+# In case we decide to make a webapp
+fastapi==0.103.0
+uvicorn==0.23.2

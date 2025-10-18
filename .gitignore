@@ -1,0 +1,9 @@
+# pycache and venv folders
+__pycache__/
+.venv/
+
+# ignore the dotenv
+.env
+
+# ignore log files
+*.jsonl
