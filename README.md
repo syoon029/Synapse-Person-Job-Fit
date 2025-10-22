@@ -17,3 +17,6 @@ deactivate when done
 
 
 ## DM ME FOR THE CONTENTS OF MY DOTENV, which should be placed at project root directory
+## DM ME FOR THE CONTENTS OF postings.csv
+
+To get started, run python data_infill.py to load the postings into the sqllite database.
