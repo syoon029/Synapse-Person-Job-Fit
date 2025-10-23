@@ -10,4 +10,4 @@ __pycache__/
 
 postings.db
 faiss_index.index
-linkedin_data/postings.csv
+*.csv

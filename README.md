@@ -19,4 +19,16 @@ deactivate when done
 ## DM ME FOR THE CONTENTS OF MY DOTENV, which should be placed at project root directory
 ## DM ME FOR THE CONTENTS OF postings.csv
 
-To get started, run python data_infill.py to load the postings into the sqllite database.
+To get started, run python infill_commands.py to load the postings into the sqllite database and setup faiss.
+
+To understand the core logic, start with infill_commands and trace where that stuff goes, and then recommender.py, and follow that logic.
+
+As a taxonomy:
+
+linkedin_data/postings.csv: the dataset
+database.py: sqllite database schema and connections
+embed.py: functions that convert postings and resumes into string embeddings
+infill_commands.py: setup script for database and faiss
+llm_logging.py: utils for logging previous LLM calls
+llm_starter_code.py: example usage of LLM with a query wrapper
+recommender.py: core recommendation logic.

@@ -2,6 +2,7 @@ import os
 from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Float, select, Text, UniqueConstraint 
 from sqlalchemy.orm import sessionmaker, relationship, Session, declarative_base
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
+from embed import embed_posting
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///postings.db")
 FAISS_INDEX_PATH = os.path.join(os.path.dirname(__file__), "faiss_index.index")
@@ -47,6 +48,7 @@ class Posting(Base):
     normalized_salary = Column(Float, nullable=True)
     zip_code = Column(String, nullable=True)
     fips = Column(String, nullable=True)
+    embedding = Column(Text, nullable=True)  # Store embedding as string representation of array
 
     def __repr__(self) -> str:  # pragma: no cover - small helper
         return f"<Posting(id={self.id} job_id={self.job_id} title={self.title})>"
@@ -191,3 +193,84 @@ def add_posting(posting : Posting):
     finally:
         session.close()
 
+def get_all_postings(embedded_only: bool = False):
+    session = Session()
+    try:
+        if embedded_only:
+            postings = session.query(Posting).filter(Posting.embedding.isnot(None)).all()
+        else:
+            postings = session.query(Posting).all()
+        return postings
+    finally:
+        session.close()
+
+def embed_all_postings(batch_size: int = 100, commit_every: int = 50):
+    """Compute and store embeddings for all postings that don't have them.
+    
+    Args:
+        batch_size: How many posts to load at once (memory efficiency).
+        commit_every: How often to commit changes to the database.
+    """
+    session = Session()
+    try:
+        # Process posts that don't have embeddings yet
+        processed = 0
+        while True:
+            # Get a batch of posts without embeddings
+            posts = (
+                session.query(Posting)
+                .filter(Posting.embedding.is_(None))
+                .limit(batch_size)
+                .all()
+            )
+            if not posts:
+                break  # No more posts to process
+
+            for i, posting in enumerate(posts, 1):
+                try:
+                    # Get embedding as a string
+                    embedding = embed_posting(posting)
+                    if embedding is not None:
+                        # Store as string representation
+                        posting.embedding = embedding
+                        processed += 1
+                        
+                        # Commit periodically
+                        if processed % commit_every == 0:
+                            try:
+                                session.commit()
+                                print(f"Processed {processed} embeddings...")
+                            except Exception as e:
+                                print(f"Warning: commit failed at {processed}: {e}")
+                                session.rollback()
+                except Exception as e:
+                    print(f"Warning: embedding failed for posting {posting.id}: {e}")
+                    continue
+
+            # Commit any remaining in this batch
+            try:
+                session.commit()
+            except Exception as e:
+                print(f"Warning: final commit failed: {e}")
+                session.rollback()
+
+        print(f"Finished! Processed {processed} embeddings total.")
+        return processed
+    finally:
+        session.close()
+
+def get_posting_by_id(posting_id: int):
+    session = Session()
+    try:
+        posting = session.query(Posting).filter(Posting.id == posting_id).first()
+        return posting
+    finally:
+        session.close()
+
+def get_postings_by_ids(posting_ids: list[int]):
+    session = Session()
+    try:
+        postings = session.query(Posting).filter(Posting.id.in_(posting_ids)).all()
+        return postings
+    finally:
+        session.close()
