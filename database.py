@@ -4,6 +4,7 @@ from sqlalchemy.orm import sessionmaker, relationship, Session, declarative_base
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from embed import embed_posting
 import json
+import pandas as pd
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///postings.db")
 FAISS_INDEX_PATH = os.path.join(os.path.dirname(__file__), "faiss_index.index")
@@ -305,6 +306,46 @@ def get_resume_text(resume_id: int) -> str | None:
         return rec.text if rec else None
     finally:
         session.close()
+
+
+def import_resumes_from_csv(csv_path: str = "resume_data/Resume.csv", commit_every: int = 100, chunksize: int = 500):
+    """Import resumes from the CSV into the database.
+
+    - Reads the CSV in chunks (pandas) to avoid large memory usage.
+    - Commits rows in batches (commit_every) for efficiency.
+    """
+    sess = Session()
+    inserted = 0
+    try:
+        for chunk in pd.read_csv(csv_path, chunksize=chunksize, dtype=str, na_values=["", "NA", "None"]):
+            records = []
+            for _, row in chunk.iterrows():
+                r = Resume(
+                    text=row.get("Resume_str") if "Resume_str" in row.index else "",
+                    name=row.get("name") if "name" in row.index else None,
+                )
+                records.append(r)
+
+            for obj in records:
+                try:
+                    sess.add(obj)
+                except Exception:
+                    sess.rollback()
+                    continue
+                inserted += 1
+                if inserted % commit_every == 0:
+                    try:
+                        sess.commit()
+                    except Exception:
+                        sess.rollback()
+            # commit remaining in this chunk
+            try:
+                sess.commit()
+            except Exception:
+                sess.rollback()
+        return inserted
+    finally:
+        sess.close()
 
 
 class ResumeCandidate(Base):

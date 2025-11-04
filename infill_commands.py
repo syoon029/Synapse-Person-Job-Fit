@@ -1,4 +1,4 @@
-from database import init_db, Posting, import_postings_from_csv
+from database import init_db, Posting, import_postings_from_csv, import_resumes_from_csv
 from index import init_faiss_index
 
 def setup_database():
@@ -8,6 +8,8 @@ def setup_database():
     init_db()
     num_imported = import_postings_from_csv()
     print(f"Imported {num_imported} job postings.")
+    num_imported = import_resumes_from_csv()
+    print(f"Imported {num_imported} resumes.")
 
 def setup_faiss_index():
     """

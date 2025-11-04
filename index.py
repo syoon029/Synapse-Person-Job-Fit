@@ -1,14 +1,17 @@
 import faiss
 import numpy as np
-from database import get_all_postings
+from database import get_all_postings, embed_all_postings
 
-def init_faiss_index() -> None:
+def init_faiss_index(recompute_embeddings=True) -> None:
     """
     FAISS index initialization.
     """
+    if recompute_embeddings:
+        embed_all_postings()
+        
     postings = get_all_postings(embedded_only=True)
-    ids = np.array([np.int64(posting["id"]) for posting in postings], dtype='int64')
-    embeddings = np.array([np.array(posting["embedding"], dtype='float32') for posting in postings])
+    ids = np.array([np.int64(posting.id) for posting in postings], dtype='int64')
+    embeddings = np.array([np.array(posting.embedding, dtype='float32') for posting in postings])
     faiss.normalize_L2(embeddings)
     embed_dim = embeddings.shape[1]
 
