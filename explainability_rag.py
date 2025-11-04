@@ -21,8 +21,11 @@ def retrieve_candidates_from_resume(resume_id: int) -> Tuple[Dict[int, Any], Dic
     Expects database.get_resume_candidates(resume_id) to return:
     {
         "resume_id": 8,
-        "top_candidate": {"id": 12, "score": 0.91},
-        "others": [{"id": 45, "score": 0.85}, {"id": 72, "score": 0.82}, ...]
+        "candidate_list": [
+            {"id": 12, "score": 0.91},
+            {"id": 45, "score": 0.85},
+            {"id": 72, "score": 0.82}
+        ]
     }
 
     Then fetch all corresponding Posting rows from postings.db and
@@ -32,10 +35,13 @@ def retrieve_candidates_from_resume(resume_id: int) -> Tuple[Dict[int, Any], Dic
     if not entry:
         raise ValueError(f"No candidate data found for resume_id={resume_id}")
 
-    all_ids = [entry["top_candidate"]["id"]] + [c["id"] for c in entry["others"]]
+    # Extract all job IDs
+    all_ids = [c["id"] for c in entry["candidate_list"]]
     postings = get_postings_by_ids(all_ids)
     id2posting = {p.id: p for p in postings}
+
     return id2posting, entry
+
 
 
 def build_rag_context(resume_text: str, id2posting: Dict[int, Any], entry: Dict[str, Any]) -> str:
@@ -44,11 +50,13 @@ def build_rag_context(resume_text: str, id2posting: Dict[int, Any], entry: Dict[
     - Resume text (provided by the caller)
     - Top-1 job (title/company/score/short description)
     - Other candidate jobs with scores (short description each)
-
-    Keep it short enough for an LLM prompt while preserving evidence.
     """
-    top = entry["top_candidate"]
-    others = entry["others"]
+    candidates = entry["candidate_list"]
+    if not candidates:
+        raise ValueError("Candidate list is empty.")
+
+    # Top-1 candidate
+    top = candidates[0]
     top_post = id2posting.get(top["id"])
     if not top_post:
         raise RuntimeError(f"Posting {top['id']} not found in DB")
@@ -62,23 +70,24 @@ def build_rag_context(resume_text: str, id2posting: Dict[int, Any], entry: Dict[
         f"- Score: {top['score']:.3f}\n"
         f"- Description: {_safe_snip(top_post.description, 500)}\n\n"
     )
-    ctx.append("Other Candidates:\n")
 
-    for c in others:
-        job = id2posting.get(c["id"])
-        if not job:
-            continue
-        ctx.append(
-            f"- Title: {job.title or ''}\n"
-            f"  Company: {job.company_name or ''}\n"
-            f"  Score: {c['score']:.3f}\n"
-            f"  Description: {_safe_snip(job.description, 320)}\n"
-        )
+    # Add other candidates
+    if len(candidates) > 1:
+        ctx.append("Other Candidates:\n")
+        for c in candidates[1:]:
+            job = id2posting.get(c["id"])
+            if not job:
+                continue
+            ctx.append(
+                f"- Title: {job.title or ''}\n"
+                f"  Company: {job.company_name or ''}\n"
+                f"  Score: {c['score']:.3f}\n"
+                f"  Description: {_safe_snip(job.description, 320)}\n"
+            )
 
-    # join all parts into one string
     context_text = "\n".join(ctx)
-
     return context_text
+
 
 
 def generate_contrastive_explanation(context_text: str) -> str:
@@ -111,14 +120,13 @@ Instructions:
         log_file="llm_history.jsonl",
     )
 
-
 def explain_resume(resume_id: int) -> str:
     """
     End-to-end pipeline:
-    1) Retrieve top-1 and other candidates for a resume from DB
+    1) Retrieve candidate jobs for a resume from DB
     2) Build RAG context (resume + jobs + scores)
-    3) Call LLM to produce a contrastive explanation
-    4) Log the final explanation to JSONL for future auditing or fine-tuning
+    3) Generate contrastive explanation via LLM
+    4) Log the result
     """
     resume_text = get_resume_text(resume_id)
     if not resume_text:
@@ -137,8 +145,4 @@ def explain_resume(resume_id: int) -> str:
 
 
 if __name__ == "__main__":
-    demo_resume = (
-        "MS in CS with 3+ years in ML/NLP. Deployed transformer models, built data pipelines, "
-        "and optimized inference latency on CPU/GPU."
-    ) ## need to replace
-    print(explain_resume(resume_id=8, resume_text=demo_resume))
+    print(explain_resume(resume_id=8))

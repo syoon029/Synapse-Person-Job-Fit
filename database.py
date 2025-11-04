@@ -3,6 +3,7 @@ from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Float
 from sqlalchemy.orm import sessionmaker, relationship, Session, declarative_base
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from embed import embed_posting
+import json
 
 DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///postings.db")
 FAISS_INDEX_PATH = os.path.join(os.path.dirname(__file__), "faiss_index.index")
@@ -276,66 +277,87 @@ def get_postings_by_ids(posting_ids: list[int]):
         session.close()
         
         
+        
 class Resume(Base):
+    """
+    Table storing each resume text and optional metadata.
+    """
     __tablename__ = "resumes"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     text = Column(Text, nullable=False)  # full resume text
-    name = Column(String, nullable=True) # optional metadata
+    name = Column(Text, nullable=True)   # optional metadata (candidate name, etc.)
+
+    def __repr__(self):
+        return f"<Resume(id={self.id}, name={self.name})>"
+
+
+
 
 def get_resume_text(resume_id: int) -> str | None:
+    """
+    Retrieve the full text of a resume from the 'resumes' table.
+    Returns the text string, or None if not found.
+    """
     session = Session()
     try:
-        rec = session.query(Resume).filter(Resume.id == resume_id).first()
+        rec = session.query(Resume).filter(Resume.id == resume_id).one_or_none()
         return rec.text if rec else None
     finally:
         session.close()
 
 
-
 class ResumeCandidate(Base):
     """
-    Stores the recommendation result per resume:
-    - One top candidate (id + score)
-    - A JSON (string) of other candidates: [{"id": int, "score": float}, ...]
+    Stores the list of job candidates (id + score) for each resume.
+    The first element in candidate_list is always the top-1 candidate.
     """
     __tablename__ = "resume_candidates"
 
     resume_id = Column(Integer, primary_key=True, autoincrement=False)
-    top_candidate_id = Column(Integer, nullable=False)
-    top_candidate_score = Column(Float, nullable=False)
-    others = Column(Text, nullable=True)  # JSON-serialized list
+    candidate_list = Column(Text, nullable=False)  # JSON list: [{"id": int, "score": float}, ...]
 
-    def __repr__(self) -> str:
-        return f"<ResumeCandidate(resume_id={self.resume_id}, top={self.top_candidate_id})>"
+    def __repr__(self):
+        return f"<ResumeCandidate(resume_id={self.resume_id}, candidates={len(json.loads(self.candidate_list))})>"
+
 
 
 def get_resume_candidates(resume_id: int) -> dict | None:
     """
-    Return a dict for the given resume_id:
+    Return a unified structure for the given resume_id:
+
     {
         "resume_id": int,
-        "top_candidate": {"id": int, "score": float},
-        "others": [{"id": int, "score": float}, ...]
+        "candidate_list": [
+            {"id": int, "score": float},  # top-1 first (sorted descending)
+            {"id": int, "score": float},
+            ...
+        ]
     }
-    or None if not found.
+
+    - Automatically sorts by score descending (highest first)
+    - Returns None if not found
     """
     session = Session()
     try:
         rec = (
             session.query(ResumeCandidate)
             .filter(ResumeCandidate.resume_id == resume_id)
-            .first()
+            .one_or_none()
         )
         if not rec:
             return None
+
+        # Parse JSON safely
+        candidate_list = json.loads(rec.candidate_list) if rec.candidate_list else []
+
+        # Sort by score (descending)
+        candidate_list = sorted(candidate_list, key=lambda x: x.get("score", 0), reverse=True)
+
         return {
             "resume_id": rec.resume_id,
-            "top_candidate": {
-                "id": rec.top_candidate_id,
-                "score": rec.top_candidate_score,
-            },
-            "others": json.loads(rec.others) if rec.others else [],
+            "candidate_list": candidate_list,
         }
+
     finally:
         session.close()
