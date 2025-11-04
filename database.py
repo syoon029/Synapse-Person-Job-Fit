@@ -274,3 +274,68 @@ def get_postings_by_ids(posting_ids: list[int]):
         return postings
     finally:
         session.close()
+        
+        
+class Resume(Base):
+    __tablename__ = "resumes"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    text = Column(Text, nullable=False)  # full resume text
+    name = Column(String, nullable=True) # optional metadata
+
+def get_resume_text(resume_id: int) -> str | None:
+    session = Session()
+    try:
+        rec = session.query(Resume).filter(Resume.id == resume_id).first()
+        return rec.text if rec else None
+    finally:
+        session.close()
+
+
+
+class ResumeCandidate(Base):
+    """
+    Stores the recommendation result per resume:
+    - One top candidate (id + score)
+    - A JSON (string) of other candidates: [{"id": int, "score": float}, ...]
+    """
+    __tablename__ = "resume_candidates"
+
+    resume_id = Column(Integer, primary_key=True, autoincrement=False)
+    top_candidate_id = Column(Integer, nullable=False)
+    top_candidate_score = Column(Float, nullable=False)
+    others = Column(Text, nullable=True)  # JSON-serialized list
+
+    def __repr__(self) -> str:
+        return f"<ResumeCandidate(resume_id={self.resume_id}, top={self.top_candidate_id})>"
+
+
+def get_resume_candidates(resume_id: int) -> dict | None:
+    """
+    Return a dict for the given resume_id:
+    {
+        "resume_id": int,
+        "top_candidate": {"id": int, "score": float},
+        "others": [{"id": int, "score": float}, ...]
+    }
+    or None if not found.
+    """
+    session = Session()
+    try:
+        rec = (
+            session.query(ResumeCandidate)
+            .filter(ResumeCandidate.resume_id == resume_id)
+            .first()
+        )
+        if not rec:
+            return None
+        return {
+            "resume_id": rec.resume_id,
+            "top_candidate": {
+                "id": rec.top_candidate_id,
+                "score": rec.top_candidate_score,
+            },
+            "others": json.loads(rec.others) if rec.others else [],
+        }
+    finally:
+        session.close()
