@@ -12,3 +12,4 @@ google-genai
 # In case we decide to make a webapp
 fastapi==0.103.0
 uvicorn==0.23.2
+sentence-transformers==3.0.1
