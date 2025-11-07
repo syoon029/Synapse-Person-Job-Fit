@@ -271,11 +271,16 @@ def get_posting_by_id(posting_id: int):
 
 def get_postings_by_ids(posting_ids: list[int]):
     session = Session()
+    postings = []
     try:
-        postings = session.query(Posting).filter(Posting.id.in_(posting_ids)).all()
-        return postings
+        for id in posting_ids:
+            assert isinstance(id, int), "posting_ids must be a list of integers"
+            posting = session.query(Posting).filter(Posting.id == id).first()
+            postings.append(posting)
     finally:
         session.close()
+    
+    return postings
         
         
         
@@ -293,7 +298,16 @@ class Resume(Base):
         return f"<Resume(id={self.id}, name={self.name})>"
 
 
-
+def get_all_resumes() -> list[Resume]:
+    """
+    Retrieve all resumes from the 'resumes' table.
+    """
+    session = Session()
+    try:
+        resumes = session.query(Resume).all()
+        return resumes
+    finally:
+        session.close()
 
 def get_resume_text(resume_id: int) -> str | None:
     """
@@ -360,7 +374,6 @@ class ResumeCandidate(Base):
 
     def __repr__(self):
         return f"<ResumeCandidate(resume_id={self.resume_id}, candidates={len(json.loads(self.candidate_list))})>"
-
 
 
 def get_resume_candidates(resume_id: int) -> dict | None:
