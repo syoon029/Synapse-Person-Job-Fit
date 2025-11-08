@@ -178,8 +178,8 @@ def import_postings_from_csv(csv_path: str = "linkedin_data/postings.csv", commi
     finally:
         sess.close()
     
-engine = create_engine(DATABASE_URL)
-Session = sessionmaker(bind=engine)
+# engine = create_engine(DATABASE_URL)
+# Session = sessionmaker(bind=engine)
 
 def init_db():
     Base.metadata.create_all(engine)
