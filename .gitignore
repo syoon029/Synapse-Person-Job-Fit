@@ -9,4 +9,6 @@ __pycache__/
 *.jsonl
 
 postings.db
-faiss_index.index
+index.faiss
+resume_data/Resume.csv
+linkedin_data/postings.csv

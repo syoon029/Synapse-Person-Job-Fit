@@ -3,6 +3,18 @@ import numpy as np
 from database import get_all_postings, embed_all_postings
 import json
 
+def extract_embedding(posting) -> np.ndarray:
+    """
+    Extract embedding from a posting.
+    """
+    return np.array(json.loads(posting.embedding), dtype='float32')
+
+def compute_l2_distance(vec1: np.ndarray, vec2: np.ndarray) -> float:
+    """
+    Compute L2 distance between two vectors.
+    """
+    return np.linalg.norm(vec1 - vec2)
+
 def init_faiss_index(recompute_embeddings=True) -> None:
     """
     FAISS index initialization.
@@ -14,7 +26,7 @@ def init_faiss_index(recompute_embeddings=True) -> None:
     ids = np.array([np.int64(posting.id) for posting in postings], dtype='int64')
 
     # posting.embedding is stored as JSON string; convert to np.array float32
-    embeddings = np.array([np.array(json.loads(posting.embedding), dtype='float32') for posting in postings])
+    embeddings = np.array([extract_embedding(posting) for posting in postings])
     faiss.normalize_L2(embeddings)
     embed_dim = embeddings.shape[1]
 
