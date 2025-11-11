@@ -12,6 +12,7 @@ __pycache__/
 .ipynb_checkpoints/
 
 postings.db
+resumes.db
 index.faiss
 resume_data/Resume.csv
 linkedin_data/postings.csv

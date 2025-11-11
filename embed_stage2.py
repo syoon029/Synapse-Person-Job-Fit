@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from transformers import AutoTokenizer, AutoModel, RobertaTokenizer, RobertaModel
 
-from database import Posting
+from database import Posting, Resume
 
 _EMBED_MODEL = 'roberta-base'
 
@@ -27,13 +27,24 @@ def cosine_similarity(arr1: np.ndarray, arr2: np.ndarray) -> float:
     '''arr1 and arr2 should be 1D vectors'''
     return (np.dot(arr1, arr2) / (np.linalg.norm(arr1) * np.linalg.norm(arr2)))
     
-def fetch_postings_text(database_url: str) -> List[str]:
+    
+def fetch_all_postings_text(database_url: str) -> List[str]:
     '''
     Returns a list of the postings' body text from the database
     '''
     engine = create_engine(database_url)
     with Session(engine) as session:
         stmt = select(Posting.description)
+        return list(session.scalars(stmt))
+    
+    
+def fetch_all_resumes_text(database_url: str) -> List[str]:
+    '''
+    Returns a list of the resumes' body text from the database
+    '''
+    engine = create_engine(database_url)
+    with Session(engine) as session:
+        stmt = select(Resume.text)
         return list(session.scalars(stmt))
     
     
@@ -51,21 +62,20 @@ def embed_text(text: str, word_reduction_type: str='sum_last_four') -> np.ndarra
     tokenizer = AutoTokenizer.from_pretrained(_EMBED_MODEL)
     tokens_t = torch.tensor([tokenizer.encode(text)[:512]])
     
-    segment_t = torch.tensor([[1] * tokens_t.shape[1]])
+#     segment_t = torch.tensor([[1] * tokens_t.shape[1]])
     model = AutoModel.from_pretrained(_EMBED_MODEL, add_pooling_layer=False, output_hidden_states=True)
     model.eval()
-#     print(tokenizer.encode(text))
-#     print(model(**tokenizer(text, return_tensors='pt')))
+
 
     with torch.no_grad():
-#         out = model(tokens_t)
-        out = model(**tokenizer(text, return_tensors='pt'))
+        out = model(tokens_t)
+#         out = model(**tokenizer(text, return_tensors='pt'))
 #         pooling_state = out[1]
         hidden_states = out[1]
         hidden_states = torch.cat(hidden_states).permute(1, 0, 2)
         
         if word_reduction_type == 'sum_last_four':
-            embeddings = hidden_states[:, -4:].mean(dim=1)
+            embeddings = hidden_states[:, -4:].sum(dim=1)
         return embeddings.numpy()
 
     
