@@ -415,3 +415,34 @@ def get_resume_candidates(resume_id: int) -> dict | None:
 
     finally:
         session.close()
+        
+
+def save_resume_candidates(resume_id: int, candidate_ids: list[int], scores: list[float]):
+    """
+    Save top-k candidate postings (ids + scores) for a given resume into DB.
+    If entry already exists, it overwrites it.
+    """
+    session = Session()
+    try:
+        candidates = [
+            {"id": int(pid), "score": float(score)}
+            for pid, score in zip(candidate_ids, scores)
+        ]
+        entry_json = json.dumps(candidates)
+
+        # Upsert logic (replace if exists)
+        existing = session.query(ResumeCandidate).filter(ResumeCandidate.resume_id == resume_id).first()
+        if existing:
+            existing.candidate_list = entry_json
+        else:
+            rec = ResumeCandidate(resume_id=resume_id, candidate_list=entry_json)
+            session.add(rec)
+
+        session.commit()
+        print(f"Saved {len(candidates)} candidates for resume_id={resume_id}")
+
+    except Exception as e:
+        session.rollback()
+        print(f"Failed to save candidates for resume_id={resume_id}: {e}")
+    finally:
+        session.close()

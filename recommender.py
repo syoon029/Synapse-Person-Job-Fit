@@ -1,6 +1,6 @@
 from embed import embed_resume_text
 from index import search_faiss
-from database import get_postings_by_ids, get_all_resumes
+from database import get_postings_by_ids, get_all_resumes, save_resume_candidates
 import random
 import timeit
 
@@ -14,6 +14,7 @@ def recommend(resume):
 def phase1_recommend(resume):
     embedding = embed_resume_text(resume.text)
     scores, ids = search_faiss(embedding, k=10)
+    save_resume_candidates(resume.id, ids[0].tolist(), scores[0].tolist()) # top k(10) resume list saved in DB
     return scores, [int(id) for id in ids[0]]
 
 def phase2_recommend(resume, candidate_ids):

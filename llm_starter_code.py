@@ -1,15 +1,17 @@
 import os
 import time
-from datetime import datetime, UTC
+from datetime import datetime, timezone
 from dotenv import load_dotenv
 from openai import OpenAI
 from llm_logging import _append_jsonl, read_logged_responses
 
 # Load environment variables from .env file
+UTC = timezone.utc
 load_dotenv()
 GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
 client = OpenAI(api_key =GEMINI_API_KEY)
-client.base_url = os.getenv("GEMINI_API_BASE_URL") # 'https://generativelanguage.googleapis.com/v1beta/openai
+#client.base_url = os.getenv("GEMINI_API_BASE_URL") # 'https://generativelanguage.googleapis.com/v1beta/openai
+client.base_url = 'https://generativelanguage.googleapis.com/v1beta/openai/' # using gemini for explainability_rag
 
 # Define the models and hyperparameters to test using LiteLLM model strings
 def get_response(model_name : str, prompt : str,  # main parameters

@@ -2,6 +2,7 @@ import faiss
 import numpy as np
 from database import get_all_postings, embed_all_postings
 import json
+import time
 
 def extract_embedding(posting) -> np.ndarray:
     """
@@ -40,8 +41,15 @@ def search_faiss(search_vector, k=5) -> tuple[np.ndarray, np.ndarray]:
     """
     FAISS SEARCH
     """
+    print("[DEBUG] Loading index.faiss...")
+    t0 = time.time()
+    
     with open('index.faiss', 'r'):
         index = faiss.read_index('index.faiss')
-    scores, ids = index.search(np.array(search_vector, dtype='float32').reshape(1, -1), k)
+        print(f"[DEBUG] Index loaded in {time.time() - t0:.3f}s")
 
+    print("[DEBUG] Starting FAISS search...")
+
+    scores, ids = index.search(np.array(search_vector, dtype='float32').reshape(1, -1), k)
+    print(f"[DEBUG] Search done in {time.time() - t0:.3f}s")
     return scores, ids

@@ -35,8 +35,12 @@ def retrieve_candidates_from_resume(resume_id: int) -> Tuple[Dict[int, Any], Dic
     if not entry:
         raise ValueError(f"No candidate data found for resume_id={resume_id}")
 
-    # Extract all job IDs
-    all_ids = [c["id"] for c in entry["candidate_list"]]
+    # sort and slice to top-3
+    candidates = sorted(entry["candidate_list"], key=lambda x: x["score"], reverse=True)[:3]
+    entry["candidate_list"] = candidates
+
+    # fetch posting info
+    all_ids = [c["id"] for c in candidates]
     postings = get_postings_by_ids(all_ids)
     id2posting = {p.id: p for p in postings}
 
@@ -49,7 +53,7 @@ def build_rag_context(resume_text: str, id2posting: Dict[int, Any], entry: Dict[
     Construct a compact, contrastive RAG context:
     - Resume text (provided by the caller)
     - Top-1 job (title/company/score/short description)
-    - Other candidate jobs with scores (short description each)
+    - Top-3 other candidate jobs with scores (short description each)
     """
     candidates = entry["candidate_list"]
     if not candidates:
@@ -71,9 +75,9 @@ def build_rag_context(resume_text: str, id2posting: Dict[int, Any], entry: Dict[
         f"- Description: {_safe_snip(top_post.description, 500)}\n\n"
     )
 
-    # Add other candidates
+    # Add other candidates (top 2,3)
     if len(candidates) > 1:
-        ctx.append("Other Candidates:\n")
+        ctx.append("Other Top Candidates (for comparison):\n")
         for c in candidates[1:]:
             job = id2posting.get(c["id"])
             if not job:
@@ -85,8 +89,7 @@ def build_rag_context(resume_text: str, id2posting: Dict[int, Any], entry: Dict[
                 f"  Description: {_safe_snip(job.description, 320)}\n"
             )
 
-    context_text = "\n".join(ctx)
-    return context_text
+    return "\n".join(ctx)
 
 
 
@@ -98,23 +101,26 @@ def generate_contrastive_explanation(context_text: str) -> str:
     """
     prompt = f"""
 You are a job-matching analyst.
-Using the following resume and multiple job candidates (with similarity scores),
-explain in 4–6 sentences why the top-ranked job is the best match.
+Using the following resume and the top 3 job candidates (with similarity scores),
+explain why the highest-scoring job (top-1) is the most suitable match,
+while briefly comparing it with the other two candidates.
 
 Context:
 {context_text}
 
 Instructions:
-- Compare the top-1 job with the other candidates.
-- Point out which skills, responsibilities, or domain focus align best with the resume.
-- Reference similarity scores briefly as evidence (no need to restate all numbers).
-- Be professional, specific, and concise. Avoid copying descriptions verbatim.
+- Focus on explaining why the top-1 job fits best, based on both the resume and the scores.
+- Discuss why the other jobs, while somewhat similar, are slightly less aligned.
+- Emphasize skill, experience, and role alignment.
+- Be analytical and concise (4–6 sentences).
 """
+
+
     # Tune temperature/max_tokens if needed:
     return get_response(
         model_name="models/gemini-2.0-flash",
         prompt=prompt,
-        max_tokens=400,
+        max_tokens=500,
         temperature=0.3,
         logging=True,
         log_file="llm_history.jsonl",
@@ -145,4 +151,4 @@ def explain_resume(resume_id: int) -> str:
 
 
 if __name__ == "__main__":
-    print(explain_resume(resume_id=8))
+    print(explain_resume(resume_id=62312955)) # test with id in DB
