@@ -43,9 +43,9 @@ def test_phase1_recommend():
 
     average_time = timeit.timeit(
         stmt='phase1_recommend(resume)',
-        setup='from __main__ import phase1_recommend; resume=resumes[0]',
+        setup='from __main__ import phase1_recommend; resume=selected_resumes[0]',
         number=10,
-        globals={'resumes': resumes}
+        globals={'selected_resumes': selected_resumes}
     ) / 10
 
     print(f"Average time for phase1_recommend: {average_time:.4f} seconds")
