@@ -1,0 +1,55 @@
+ID,Resume_str,Resume_html,Category
+1,"
+Education:
+Georgia Institute of Technology B.S. & M.S. in Computer Science GPA 4.0
+Graduate Teaching Assistant: Introduction to Artificial Intelligence
+May 2026 Atlanta, GA
+
+Professional Experience:
+Google May 2025 – August 2025
+Software Engineer Intern Mountain View, CA
+- Optimized a low-latency C++ inference system that delivers relevant ads without sacrificing user privacy.
+- Enhanced scalability by transitioning to an async request model, boosting model serving throughput by 1.6x.
+- Slashed deployment costs by $800k/yr by implementing cancellation propagation and deadline enforcement
+in gRPC services, enabling usage of 75% smaller virtual machines while maintaining inference performance.
+- Developed an automated performance testing pipeline on GCP, leveraging Terraform Infrastructure-as-Code
+and synthetic load with wrk2 to validate system reliability and identify bottlenecks before deployment.
+
+Georgia Tech ML Infrastructure and Architecture Lab January 2024 – Present
+Research Assistant Atlanta, GA
+- Formulated a real-time simulation protocol to assess model training and inference bottlenecks, leveraging
+multithreaded C++ to simulate parallel communication/computation and Python to analyze data.
+- Architected a system for prioritizing satellite images for downlink utilizing an EfficientNet backbone and taskspecific prediction heads, pipelining and distributing load between the CPU and an AI accelerator.
+- Engineered a dynamic, power-aware scheduler for prioritization tasks that reduces latency by 2.1x through
+eliminating redundant inferences, which I presented as first author at MLSys ’25.
+
+Travelers Insurance June 2024 – August 2024
+Software Engineer Intern St. Paul, MN
+- Automated the validation of 1300 tables migrated from on-premises SQL Server instances to AWS S3 via CLI
+scripts and schema parsing, reducing validation time by 80% and identifying 30+ structural discrepancies.
+- Reduced data volume in ~300m record table by 65% through a retention policy, enhancing data governance.
+- Created a new dashboard for tracking policy renewals, now in production use by over 700 account executives.
+
+People for PSEO September 2022 – Present
+Finance Director & Board Member Minneapolis, MN
+- Oversaw finance committee and led successful grant and donor initiatives, resulting in 2.3x budget growth.
+- Formed and maintained partnerships with non-profits, student organizations, and the MN Dept. of Education.
+
+Projects:
+- Fundraising Utility Suite: Refined grant-writing and marketing tool that leverages retrieval augmented
+generation to create org-specific content – packaged into a ReactJS/Flask app and served through GCP.
+- ShopEase: Microservices-based e-commerce platform with Spring (Java) backend that provides secure
+product management and order tracking via OAuth 2.0, deployed on AWS using Lambda and RDS (Postgres).
+- Workforce Scheduling and Routing: Gradient-boosting classifier that predicts the best optimization
+algorithm given a problem instance and runtime constraint, achieving 40% higher performance than any
+algorithm individually; resulting co-author paper is in review.
+- MeloDEX: AI-powered search engine that lets users find songs by simply describing the mood or style,
+incorporating a sleek UI, relational filtering, efficient vector search, and Spotify and Apple Music integrations.
+
+Skills:
+Programming: Python, C++, Java, C, SQL, JavaScript, Bash
+Technologies: Git, GitHub, Docker, Linux, SQL Server, Excel, Jira, Azure, AWS, Google Cloud
+Full Stack: ReactJS, REST APIs, Spring, Flask, FastAPI, Firebase, PostgreSQL, SQLite
+Machine Learning: PyTorch, TensorFlow, SciKit, SciPy, Pandas, NumPy
+Interests: Backend Design, Distributed Systems, High Performance Computing, Edge Computing
+Concepts: Object-Oriented Design, Data Structures and Algorithms, Systems and Networks, Databases",BLANK,Software Engineer

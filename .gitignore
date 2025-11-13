@@ -16,3 +16,5 @@ resumes.db
 index.faiss
 resume_data/Resume.csv
 linkedin_data/postings.csv
+linkedin_data/postings.csv
+sample.txt
