@@ -60,23 +60,28 @@ def embed_text(text: str, word_reduction_type: str='sum_last_four') -> np.ndarra
     '''
     text = _clean_text(text)
     tokenizer = AutoTokenizer.from_pretrained(_EMBED_MODEL)
-    tokens_t = torch.tensor([tokenizer.encode(text)[:512]])
-    
-#     segment_t = torch.tensor([[1] * tokens_t.shape[1]])
+    # Tokenize with truncation to the model's max length
+    tokenized = tokenizer(text, truncation=True, max_length=512, return_tensors='pt')
+
     model = AutoModel.from_pretrained(_EMBED_MODEL, add_pooling_layer=False, output_hidden_states=True)
     model.eval()
 
-
     with torch.no_grad():
-        out = model(tokens_t)
-#         out = model(**tokenizer(text, return_tensors='pt'))
-#         pooling_state = out[1]
-        hidden_states = out[1]
-        hidden_states = torch.cat(hidden_states).permute(1, 0, 2)
-        
+        outputs = model(**tokenized)
+        # outputs.hidden_states is a tuple: one tensor per layer (batch, seq_len, hidden)
+        hidden_states = outputs.hidden_states
+
         if word_reduction_type == 'sum_last_four':
-            embeddings = hidden_states[:, -4:].sum(dim=1)
-        return embeddings.numpy()
+            # Take the last 4 layers, stack and sum them: result shape (batch, seq_len, hidden)
+            last_four = torch.stack(hidden_states[-4:], dim=0)
+            summed = last_four.sum(dim=0)
+            # batch size is 1, return token-level embeddings for that single example
+            embeddings = summed[0]
+            return embeddings.numpy()
+        else:
+            # Fallback: return last layer token embeddings
+            embeddings = hidden_states[-1][0]
+            return embeddings.numpy()
 
     
 def doc_sim_score(emb1: np.ndarray, emb2: np.ndarray, comp_type: str='mean_embeddings') -> np.ndarray:
