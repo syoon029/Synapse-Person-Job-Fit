@@ -1,5 +1,5 @@
 import json
-from typing import Dict, Any, Tuple
+from typing import Dict, Any, Tuple, List
 
 from database import get_postings_by_ids, get_resume_candidates, get_resume_text # DB helpers
 from llm_starter_code import get_response
@@ -47,7 +47,6 @@ def retrieve_candidates_from_resume(resume_id: int) -> Tuple[Dict[int, Any], Dic
     return id2posting, entry
 
 
-
 def build_rag_context(resume_text: str, id2posting: Dict[int, Any], entry: Dict[str, Any]) -> str:
     """
     Construct a compact, contrastive RAG context:
@@ -92,6 +91,40 @@ def build_rag_context(resume_text: str, id2posting: Dict[int, Any], entry: Dict[
     return "\n".join(ctx)
 
 
+def build_rag_context_for_selected_postings(resume_text: str, postings: List[Any]) -> str:
+    """
+    Construct RAG context for UI-selected postings (no scores from DB).
+    This version builds context from a list of Posting objects directly.
+    
+    Args:
+        resume_text: The resume text
+        postings: List of Posting objects selected by the user
+    
+    Returns:
+        Formatted context string for LLM
+    """
+    if not postings:
+        raise ValueError("No postings provided for explanation.")
+    
+    ctx = []
+    ctx.append(f"Resume:\n{_safe_snip(resume_text, 1200)}\n")
+    
+    # Add all selected postings
+    ctx.append(f"Selected Job Postings ({len(postings)} total):\n\n")
+    
+    for idx, posting in enumerate(postings, 1):
+        ctx.append(
+            f"Job {idx}:\n"
+            f"- Title: {posting.title or ''}\n"
+            f"- Company: {posting.company_name or ''}\n"
+            f"- Location: {posting.location or 'Not specified'}\n"
+            f"- Experience Level: {posting.formatted_experience_level or 'Not specified'}\n"
+            f"- Skills: {_safe_snip(posting.skills_desc, 200)}\n"
+            f"- Description: {_safe_snip(posting.description, 400)}\n\n"
+        )
+    
+    return "\n".join(ctx)
+
 
 def generate_contrastive_explanation(context_text: str) -> str:
     """
@@ -115,7 +148,6 @@ Instructions:
 - Be analytical and concise (4–6 sentences).
 """
 
-
     # Tune temperature/max_tokens if needed:
     return get_response(
         model_name="models/gemini-2.0-flash",
@@ -125,6 +157,47 @@ Instructions:
         logging=True,
         log_file="llm_history.jsonl",
     )
+
+
+def generate_multi_posting_explanation(context_text: str, num_postings: int) -> str:
+    """
+    Ask the LLM to explain why the selected postings are good matches for the resume.
+    This is used for UI-selected postings where we explain each job's fit.
+    
+    Args:
+        context_text: Formatted context with resume and postings
+        num_postings: Number of postings being explained
+    
+    Returns:
+        LLM-generated explanation
+    """
+    prompt = f"""
+You are a job-matching analyst helping a candidate understand why certain jobs match their resume.
+
+Context:
+{context_text}
+
+Instructions:
+- Analyze how well each of the {num_postings} selected job posting(s) match the candidate's resume.
+- For each job, explain:
+  * What skills and experiences from the resume align with the job requirements
+  * Why this role could be a good fit for the candidate
+  * Any potential gaps or areas where the candidate might need to emphasize certain skills
+- If multiple jobs are provided, briefly compare them and note which might be the strongest match.
+- Be specific, citing actual skills, experiences, or qualifications from both the resume and job descriptions.
+- Provide actionable insights the candidate can use.
+- Keep the analysis concise but thorough (aim for 2-3 paragraphs per job).
+"""
+
+    return get_response(
+        model_name="models/gemini-2.0-flash",
+        prompt=prompt,
+        max_tokens=1000,
+        temperature=0.3,
+        logging=True,
+        log_file="llm_history.jsonl",
+    )
+
 
 def explain_resume(resume_id: int) -> str:
     """
@@ -147,6 +220,42 @@ def explain_resume(resume_id: int) -> str:
         "context": ctx,
         "explanation": explanation,
     })
+    return explanation
+
+
+def explain_recommendation(resume_text: str, postings: List[Any]) -> str:
+    """
+    UI-friendly function to explain why selected postings are good matches.
+    This is called from the Streamlit UI with user-selected postings.
+    
+    Args:
+        resume_text: The candidate's resume text
+        postings: List of Posting objects selected by the user in the UI
+    
+    Returns:
+        LLM-generated explanation of why these jobs match the resume
+    """
+    if not resume_text:
+        raise ValueError("Resume text is required for explanation.")
+    
+    if not postings or len(postings) == 0:
+        raise ValueError("At least one posting must be selected for explanation.")
+    
+    # Build context from selected postings
+    ctx = build_rag_context_for_selected_postings(resume_text, postings)
+    
+    # Generate explanation
+    explanation = generate_multi_posting_explanation(ctx, len(postings))
+    
+    # Log for analysis
+    _append_jsonl("ui_explanation_log.jsonl", {
+        "resume_preview": _safe_snip(resume_text, 200),
+        "posting_ids": [p.id for p in postings],
+        "num_postings": len(postings),
+        "context": ctx,
+        "explanation": explanation,
+    })
+    
     return explanation
 
 

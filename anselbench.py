@@ -96,14 +96,14 @@ if __name__ == "__main__":
         ranks_array = np.array(ranks)
         scores_array = np.array(scores)
         return {
-            'rank_mean': np.mean(ranks_array),
-            'rank_median': np.median(ranks_array),
-            'rank_min': np.min(ranks_array),
-            'rank_max': np.max(ranks_array),
-            'score_mean': np.mean(scores_array),
-            'score_median': np.median(scores_array),
-            'score_min': np.min(scores_array),
-            'score_max': np.max(scores_array),
+            'rank_mean': float(np.mean(ranks_array)),
+            'rank_median': int(np.median(ranks_array)),
+            'rank_min': int(np.min(ranks_array)),
+            'rank_max': int(np.max(ranks_array)),
+            'score_mean': float(np.mean(scores_array)),
+            'score_median': float(np.median(scores_array)),
+            'score_min': float(np.min(scores_array)),
+            'score_max': float(np.max(scores_array)),
         }
     
     def get_stats_for_companies(company_list):
@@ -126,8 +126,8 @@ if __name__ == "__main__":
                 phase2_scores_new.append(score2)
         return compute_stats(phase1_ranks_new, phase1_scores_new), compute_stats(phase2_ranks_new, phase2_scores_new)
     # Statistics: Mean, Median, Min, Max:  Phase 1 Rank, Phase 2 Rank, Phase 1 Score, Phase 2 Score for interviews vs. offer
-    interview_stats_phase1, interview_stats_phase2 = get_stats_for_companies(interviews)
-    offer_stats_phase1, offer_stats_phase2 = get_stats_for_companies(offers)
+    interview_stats_phase1, interview_stats_phase2 = get_stats_for_companies(set(interviews))
+    offer_stats_phase1, offer_stats_phase2 = get_stats_for_companies(set(offers))
 
     print("\nInterviewed Companies Stats:")
     print("Phase 1:", interview_stats_phase1)
