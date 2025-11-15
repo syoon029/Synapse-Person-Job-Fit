@@ -378,19 +378,10 @@ class ResumeCandidate(Base):
 
 def get_resume_candidates(resume_id: int) -> dict | None:
     """
-    Return a unified structure for the given resume_id:
-
-    {
-        "resume_id": int,
-        "candidate_list": [
-            {"id": int, "score": float},  # top-1 first (sorted descending)
-            {"id": int, "score": float},
-            ...
-        ]
-    }
-
-    - Automatically sorts by score descending (highest first)
-    - Returns None if not found
+    Return a unified structure for the given resume_id.
+    
+    The key change is adding a unified 'score' field (using phase2_score if present)
+    and then sorting by that unified score.
     """
     session = Session()
     try:
@@ -405,8 +396,21 @@ def get_resume_candidates(resume_id: int) -> dict | None:
         # Parse JSON safely
         candidate_list = json.loads(rec.candidate_list) if rec.candidate_list else []
 
-        # Sort by score (descending)
-        candidate_list = sorted(candidate_list, key=lambda x: x.get("score", 0), reverse=True)
+        for candidate in candidate_list:
+            if "phase2_score" in candidate:
+                candidate["score"] = candidate["phase2_score"]
+            elif "phase1_score" in candidate:
+                candidate["score"] = candidate["phase1_score"]
+            else:
+                candidate["score"] = 0.0 
+
+
+        candidate_list = sorted( 
+            candidate_list,
+            key=lambda x: x["score"],
+            reverse=True
+        )
+
 
         return {
             "resume_id": rec.resume_id,
@@ -425,7 +429,7 @@ def save_resume_candidates(resume_id: int, candidate_ids: list[int], scores: lis
     session = Session()
     try:
         candidates = [
-            {"id": int(pid), "score": float(score)}
+            {"id": int(pid), "phase1_score": float(score)}
             for pid, score in zip(candidate_ids, scores)
         ]
         entry_json = json.dumps(candidates)
@@ -444,5 +448,46 @@ def save_resume_candidates(resume_id: int, candidate_ids: list[int], scores: lis
     except Exception as e:
         session.rollback()
         print(f"Failed to save candidates for resume_id={resume_id}: {e}")
+    finally:
+        session.close()
+
+
+def update_phase2_scores(resume_id: int, candidate_ids: list[int], scores: list[float]):
+    """
+    Expected output:
+    [
+  {"id": 87, "phase1_score": 0.912, "phase2_score": 0.945},
+  {"id": 193, "phase1_score": 0.875, "phase2_score": 0.901},
+  {"id": 90, "phase1_score": 0.832, "phase2_score": 0.899}
+]
+
+    """
+    session = Session()
+    try:
+        rec = session.query(ResumeCandidate).filter(ResumeCandidate.resume_id == resume_id).first()
+        if not rec:
+            print(f"No phase1 data found for resume_id={resume_id}")
+            return
+
+        candidate_list = json.loads(rec.candidate_list)
+
+        # Map posting_id → record
+        record_map = {c["id"]: c for c in candidate_list}
+
+        # Add phase2_score
+        for pid, score in zip(candidate_ids, scores):
+            pid = int(pid)
+            score = float(score)
+            if pid in record_map:
+                record_map[pid]["phase2_score"] = score
+
+
+        rec.candidate_list = json.dumps(list(record_map.values()))
+        session.commit()
+        print(f"Updated phase2 scores for resume_id={resume_id}")
+
+    except Exception as e:
+        session.rollback()
+        print(f"Failed to update phase2 scores for resume_id={resume_id}: {e}")
     finally:
         session.close()

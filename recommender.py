@@ -1,7 +1,7 @@
 from embed import embed_resume_text, _safe_join
 from embed_stage2 import embed_text, doc_sim_score
 from index import search_faiss
-from database import get_postings_by_ids, get_all_resumes, save_resume_candidates
+from database import get_postings_by_ids, get_all_resumes, save_resume_candidates, update_phase2_scores
 import random
 import timeit
 
@@ -19,6 +19,7 @@ def recommend(resume):
     pretty_print_recommendations(resume, scores[0], ids)
     scores2, ids2 = phase2_recommend(resume, ids)
     print("PHASE 2 _______________________________")
+    update_phase2_scores(resume.id, list(ids2), list(scores2))
     pretty_print_recommendations(resume, scores2, ids2)
 
 def phase1_recommend(resume):
