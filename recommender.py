@@ -1,12 +1,15 @@
 from embed import embed_resume_text, _safe_join
 from embed_stage2 import embed_text, doc_sim_score
 from index import search_faiss
-from database import get_postings_by_ids, get_all_resumes, save_resume_candidates, update_phase2_scores
+from database import get_postings_by_ids, get_all_resumes, save_resume_candidates, update_phase2_scores,  update_phase2_advanced_scores, update_llm_scores
 from llm_scorer import load_cache, pairwise_rank_to_scores
 import random
 import timeit
 import numpy as np
 from scipy.stats import rankdata
+import time
+from datetime import timedelta
+
 
 # --- ADDED: Advanced Ensemble Functions ---
 
@@ -74,6 +77,7 @@ def recommend(resume):
     update_phase2_scores(resume.id, list(ids2), list(scores2))
     pretty_print_recommendations(resume, scores2, ids2)
 
+
 def recommend_advanced(resume):
     """
     Advanced recommendation using ensemble of Phase 1, Phase 2, and LLM.
@@ -88,11 +92,14 @@ def recommend_advanced(resume):
     update_phase2_scores(resume.id, list(ids_advanced), list(scores_advanced))
     pretty_print_recommendations(resume, scores_advanced, ids_advanced)
 
+
+
 def phase1_recommend(resume):
     embedding = embed_resume_text(resume.text)
     scores, ids = search_faiss(embedding, k=10)
     save_resume_candidates(resume.id, ids[0].tolist(), scores[0].tolist())
     return scores, [int(id) for id in ids[0]]
+
 
 def phase2_recommend(resume, candidate_ids):
     postings = get_postings_by_ids(candidate_ids)
@@ -113,6 +120,7 @@ def phase2_recommend(resume, candidate_ids):
     scored_postings.sort(reverse=True, key=lambda x: x[0])
     scores, ids = zip(*scored_postings)
     return scores, ids
+
 
 def phase2_recommend_advanced(resume, candidate_ids):
     """
@@ -227,20 +235,161 @@ def test_phase1_recommend():
     print(f"Average time for phase1_recommend: {average_time:.4f} seconds")
 
 def test_full_recommend():
-    selected_resumes = get_random_resumes()
-    for resume in selected_resumes:
-        recommend(resume)
+    selected_resumes = get_random_resumes(5)
+    total = len(selected_resumes)
+    
+    print(f"\n[INFO] Starting full recommendation for {total} resumes...\n")
+    
+    start_time = time.time()
 
-def test_full_recommend_advanced():
-    """Test the advanced ensemble recommendation system"""
-    selected_resumes = get_random_resumes(1)
-    for resume in selected_resumes:
-        print("\n" + "="*80)
-        print(f"Testing Advanced Recommendation for Resume {resume.id}")
+    for idx, resume in enumerate(selected_resumes, start=1):
+
         print("="*80)
+        print(f"[ {idx} / {total} ] Processing Resume ID {resume.id}")
+
+
+        elapsed = time.time() - start_time
+        avg_time_per_resume = elapsed / idx
+        remaining = avg_time_per_resume * (total - idx)
+        
+        eta_str = str(timedelta(seconds=int(remaining)))
+        print(f"[ETA] Estimated time remaining: {eta_str}")
+        print("="*80)
+
+        
+        recommend(resume)
+        
+    total_elapsed = time.time() - start_time
+    print("\n[INFO] All resumes processed!")
+    print(f"Total time: {str(timedelta(seconds=int(total_elapsed)))}")
+
+def test_full_recommend_advanced(n=1):
+    """
+    Test the advanced ensemble recommendation system
+    with real-time progress + ETA.
+    """
+    selected_resumes = get_all_resumes()
+    total = len(selected_resumes)
+
+    print(f"\n[INFO] Starting ADVANCED recommendation for {total} resumes...\n")
+
+    start_time = time.time()
+
+    for idx, resume in enumerate(selected_resumes, start=1):
+        print("\n" + "=" * 80)
+        print(f"[ {idx} / {total} ] Testing Advanced Recommendation for Resume {resume.id}")
+
+        elapsed = time.time() - start_time
+        avg_time_per_resume = elapsed / idx
+        remaining = avg_time_per_resume * (total - idx)
+        eta_str = str(timedelta(seconds=int(remaining)))
+
+        print(f"[ETA] Estimated time remaining: {eta_str}")
+        print("=" * 80)
+        
         recommend_advanced(resume)
+
+    total_elapsed = time.time() - start_time
+    print("\n[INFO] All advanced recommendations complete!")
+    print(f"Total time: {str(timedelta(seconds=int(total_elapsed)))}")
+
+
+
+def recommend_full_pipeline(resume):
+    print(f"\n==============================")
+    print(f"Running FULL PIPELINE for Resume {resume.id}")
+    print(f"==============================")
+
+    # --------------------
+    # 1) Phase 1
+    # --------------------
+    p1_scores_raw, p1_ids_raw = phase1_recommend(resume)
+    p1_scores = p1_scores_raw[0].tolist()   # float list
+    p1_ids = p1_ids_raw                     # already list[int]
+
+    
+    print("[Phase 1] Done.")
+
+    # --------------------
+    # 2) Phase 2
+    # --------------------
+    phase2_scores, _ = phase2_recommend(resume, p1_ids)
+    phase2_scores = list(phase2_scores)
+
+    update_phase2_scores(resume.id, p1_ids, phase2_scores)
+    print("[Phase 2] Done.")
+
+    # --------------------
+    # 3) LLM
+    # --------------------
+    postings = get_postings_by_ids(p1_ids)
+    postings_texts = []
+    for p in postings:
+        postings_texts.append(_safe_join([
+            f"Title: {p.title}",
+            f"Company: {p.company_name}",
+            f"Location: {p.location}",
+            f"Experience Level: {p.formatted_experience_level}",
+            f"Skills: {p.skills_desc}",
+            f"Description: {p.description}"
+        ]))
+
+    llm_cache = load_cache()
+    llm_scores = pairwise_rank_to_scores(
+        resume_text=resume.text,
+        postings_texts=postings_texts,
+        cache=llm_cache
+    )
+    
+    llm_scores = [float(s) for s in llm_scores]
+
+    update_llm_scores(resume.id, p1_ids, list(llm_scores))
+    print("[LLM] Done.")
+
+    # --------------------
+    # 4) Advanced Ensemble
+    # --------------------
+    adv_scores, adv_ids = phase2_recommend_advanced(resume, p1_ids)
+    adv_scores = [float(s) for s in adv_scores]
+
+    update_phase2_advanced_scores(resume.id, list(adv_ids), list(adv_scores))
+    print("[Advanced Ensemble] Done.")
+
+    return {
+        "phase1_ids": p1_ids,
+        "phase1_scores": p1_scores,
+        "phase2_scores": phase2_scores,
+        "llm_scores": llm_scores,
+        "advanced_ids": adv_ids,
+        "advanced_scores": adv_scores
+    }
+
+
+
+def run_full_pipeline_all():
+    resumes = get_all_resumes()
+    total = len(resumes)
+    start = time.time()
+
+    for idx, r in enumerate(resumes, 1):
+        elapsed = time.time() - start
+        avg = elapsed / idx
+        remaining = avg * (total - idx)
+        eta_str = str(timedelta(seconds=int(remaining)))
+
+        print("\n===================================================")
+        print(f"[{idx}/{total}] Resume ID={r.id}  | ETA: {eta_str}")
+        print("===================================================\n")
+
+        recommend_full_pipeline(r)
+
+    total_elapsed = time.time() - start
+    print("\nAll Done! Total time:", str(timedelta(seconds=int(total_elapsed))))
+
+
 
 if __name__ == "__main__":
     # Uncomment the test you want to run:
-    # test_full_recommend()  # Original system
-    test_full_recommend_advanced()  # New advanced system
+    #test_full_recommend()  # Original system
+    #test_full_recommend_advanced()  # New advanced system
+    run_full_pipeline_all() # do everything 

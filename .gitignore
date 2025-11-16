@@ -17,5 +17,7 @@ index.faiss
 resume_data/Resume.csv
 linkedin_data/postings.csv
 linkedin_data/postings.csv
+linkedin_data/full_postings.csv
+
 sample.txt
 llm_pairwise_cache.json

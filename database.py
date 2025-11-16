@@ -322,7 +322,7 @@ def get_resume_text(resume_id: int) -> str | None:
         session.close()
 
 
-def import_resumes_from_csv(csv_path: str = "resume_data/Resume.csv", commit_every: int = 100, chunksize: int = 500):
+def import_resumes_from_csv(csv_path: str = "resume_data/Resume.csv", commit_every: int = 100, chunksize: int = 500, limit: int = 1000):
     """Import resumes from the CSV into the database.
 
     - Reads the CSV in chunks (pandas) to avoid large memory usage.
@@ -334,13 +334,47 @@ def import_resumes_from_csv(csv_path: str = "resume_data/Resume.csv", commit_eve
         for chunk in pd.read_csv(csv_path, chunksize=chunksize, dtype=str, na_values=["", "NA", "None"]):
             records = []
             for _, row in chunk.iterrows():
+                
+                if inserted >= limit:
+                    break
+                # ---- 1) ID safely parse ----
+                raw_id = row.get("ID")
+                try:
+                    resume_id = int(raw_id)
+                except:
+                    continue  # skip row with invaild ID
+
+                # ---- 2) Resume text check ----
+                resume_text = row.get("Resume_str")
+                if resume_text is None or str(resume_text).strip() == "":
+                    continue  #skip  empty resume
+
+                # ---- 3) name field ----
+                name = row.get("name") if "name" in row.index else None
+
+                # ---- 4) duplicates ceheck ----
+                exists = sess.query(Resume).filter(Resume.id == resume_id).first()
+                if exists:
+                    continue
+
+                # ---- 5) add valid row only ----
                 r = Resume(
-                    text=row.get("Resume_str") if "Resume_str" in row.index else "",
-                    name=row.get("name") if "name" in row.index else None,
-                    id=row.get("ID")
+                    id=resume_id,
+                    text=str(resume_text),
+                    name=name
                 )
                 records.append(r)
+
+                # r = Resume(
+                #     text=row.get("Resume_str") if "Resume_str" in row.index else "",
+                #     name=row.get("name") if "name" in row.index else None,
+                #     id=row.get("ID")
+                # )
+                #records.append(r)
+                
             for obj in records:
+                if inserted >= limit:
+                     break
                 try:
                     sess.add(obj)
                 except Exception:
@@ -353,10 +387,15 @@ def import_resumes_from_csv(csv_path: str = "resume_data/Resume.csv", commit_eve
                     except Exception:
                         sess.rollback()
             # commit remaining in this chunk
+            if inserted >= limit:
+                break
+            
             try:
                 sess.commit()
             except Exception:
                 sess.rollback()
+                
+        print(f"Imported {inserted} resumes (limit={limit})")
         return inserted
     finally:
         sess.close()
@@ -489,5 +528,95 @@ def update_phase2_scores(resume_id: int, candidate_ids: list[int], scores: list[
     except Exception as e:
         session.rollback()
         print(f"Failed to update phase2 scores for resume_id={resume_id}: {e}")
+    finally:
+        session.close()
+
+
+def update_phase2_advanced_scores(
+    resume_id: int,
+    candidate_ids: list[int],
+    scores: list[float],
+    field: str = "phase2_advanced_score",
+):
+    """
+    Save ensemble / advanced Phase 2 scores into the JSON for each candidate.
+
+    Expected_output: 
+    [
+      {"id": 87, "phase1_score": 0.912, "phase2_score": 0.945, "phase2_advanced_score": 0.971},
+      ...
+    ]
+    """
+    session = Session()
+    try:
+        rec = (
+            session.query(ResumeCandidate)
+            .filter(ResumeCandidate.resume_id == resume_id)
+            .first()
+        )
+        if not rec:
+            print(f"No candidate data found for resume_id={resume_id}")
+            return
+
+        candidate_list = json.loads(rec.candidate_list) if rec.candidate_list else []
+        record_map = {c["id"]: c for c in candidate_list}
+
+        for pid, score in zip(candidate_ids, scores):
+            pid = int(pid)
+            score = float(score)
+            if pid in record_map:
+                record_map[pid][field] = score
+
+        rec.candidate_list = json.dumps(list(record_map.values()))
+        session.commit()
+        print(f"Updated {field} for resume_id={resume_id}")
+
+    except Exception as e:
+        session.rollback()
+        print(f"Failed to update {field} for resume_id={resume_id}: {e}")
+    finally:
+        session.close()
+        
+        
+        
+def update_llm_scores(resume_id: int, candidate_ids: list[int], llm_scores: list[float]):
+    """
+    Add LLM scores for each candidate:
+    
+    {
+      "id": 87,
+      "phase1_score": ...,
+      "phase2_score": ...,
+      "llm_score":
+    }
+    """
+    session = Session()
+    try:
+        rec = (
+            session.query(ResumeCandidate)
+            .filter(ResumeCandidate.resume_id == resume_id)
+            .one_or_none()
+        )
+        if not rec:
+            print(f"[WARN] No candidate list found for resume_id={resume_id}")
+            return
+
+        candidate_list = json.loads(rec.candidate_list)
+        record_map = {c["id"]: c for c in candidate_list}
+
+        # Add llm_score
+        for pid, s in zip(candidate_ids, llm_scores):
+            pid = int(pid)
+            s = float(s)
+            if pid in record_map:
+                record_map[pid]["llm_score"] = s
+
+        rec.candidate_list = json.dumps(list(record_map.values()))
+        session.commit()
+        print(f"[OK] LLM scores stored for resume {resume_id}")
+
+    except Exception as e:
+        session.rollback()
+        print(f"[ERROR] update_llm_scores({resume_id}): {e}")
     finally:
         session.close()

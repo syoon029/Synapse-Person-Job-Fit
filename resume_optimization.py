@@ -401,7 +401,8 @@ if __name__ == "__main__":
     postings = get_postings_by_ids(target_posting_ids)
     
     print(f"Target Posting IDs for optimization: {target_posting_ids}")
-    print(f"Base resume (first 100 chars): {resume.text[:100].replace('\n', ' ')}...")
+    preview = resume.text[:100].replace("\n", " ")
+    print(f"Base resume (first 100 chars): {preview}...")
     print("-" * 30)
 
     # 2. Run the optimization algorithm
