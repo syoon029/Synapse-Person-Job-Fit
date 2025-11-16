@@ -304,23 +304,22 @@ def recommend_full_pipeline(resume):
     # 1) Phase 1
     # --------------------
     p1_scores_raw, p1_ids_raw = phase1_recommend(resume)
-    p1_scores = p1_scores_raw[0].tolist()   # float list
-    p1_ids = p1_ids_raw                     # already list[int]
+    p1_scores = p1_scores_raw[0].tolist()
+    p1_ids = p1_ids_raw
 
-    
     print("[Phase 1] Done.")
 
     # --------------------
-    # 2) Phase 2
+    # 2) Phase 2  (only once)
     # --------------------
-    phase2_scores, _ = phase2_recommend(resume, p1_ids)
-    phase2_scores = list(phase2_scores)
+    phase2_scores_raw, _ = phase2_recommend(resume, p1_ids)
+    phase2_scores = list(phase2_scores_raw)
 
     update_phase2_scores(resume.id, p1_ids, phase2_scores)
     print("[Phase 2] Done.")
 
     # --------------------
-    # 3) LLM
+    # 3) LLM (only once)
     # --------------------
     postings = get_postings_by_ids(p1_ids)
     postings_texts = []
@@ -335,24 +334,35 @@ def recommend_full_pipeline(resume):
         ]))
 
     llm_cache = load_cache()
-    llm_scores = pairwise_rank_to_scores(
+    llm_scores = np.array(pairwise_rank_to_scores(
         resume_text=resume.text,
         postings_texts=postings_texts,
         cache=llm_cache
-    )
+    ))
     
     llm_scores = [float(s) for s in llm_scores]
 
-    update_llm_scores(resume.id, p1_ids, list(llm_scores))
+    update_llm_scores(resume.id, p1_ids, llm_scores)
     print("[LLM] Done.")
 
     # --------------------
-    # 4) Advanced Ensemble
+    # 4) Advanced Ensemble (NO recomputation)
     # --------------------
-    adv_scores, adv_ids = phase2_recommend_advanced(resume, p1_ids)
-    adv_scores = [float(s) for s in adv_scores]
+    ensemble_scores = ensemble_rank_weighted(
+        phase1_scores=np.array(p1_scores),
+        phase2_scores=np.array(phase2_scores),
+        llm_scores=np.array(llm_scores),
+        weights=(0.8, 0.1, 0.1)
+    )
 
-    update_phase2_advanced_scores(resume.id, list(adv_ids), list(adv_scores))
+    scored_postings = list(zip(ensemble_scores, p1_ids))
+    scored_postings.sort(reverse=True, key=lambda x: x[0])
+    adv_scores, adv_ids = zip(*scored_postings)
+
+    adv_scores = [float(s) for s in adv_scores]
+    adv_ids = list(adv_ids)
+
+    update_phase2_advanced_scores(resume.id, adv_ids, adv_scores)
     print("[Advanced Ensemble] Done.")
 
     return {
