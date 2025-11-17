@@ -435,20 +435,20 @@ def get_resume_candidates(resume_id: int) -> dict | None:
         # Parse JSON safely
         candidate_list = json.loads(rec.candidate_list) if rec.candidate_list else []
 
-        for candidate in candidate_list:
-            if "phase2_score" in candidate:
-                candidate["score"] = candidate["phase2_score"]
-            elif "phase1_score" in candidate:
-                candidate["score"] = candidate["phase1_score"]
-            else:
-                candidate["score"] = 0.0 
+        # for candidate in candidate_list:
+        #     if "phase2_score" in candidate:
+        #         candidate["score"] = candidate["phase2_score"]
+        #     elif "phase1_score" in candidate:
+        #         candidate["score"] = candidate["phase1_score"]
+        #     else:
+        #         candidate["score"] = 0.0 
 
 
-        candidate_list = sorted( 
-            candidate_list,
-            key=lambda x: x["score"],
-            reverse=True
-        )
+        # candidate_list = sorted( 
+        #     candidate_list,
+        #     key=lambda x: x["score"],
+        #     reverse=True
+        # )
 
 
         return {

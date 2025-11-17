@@ -5,6 +5,7 @@ from database import get_postings_by_ids, get_all_resumes, save_resume_candidate
 from llm_scorer import load_cache, pairwise_rank_to_scores
 import random
 import timeit
+import json
 import numpy as np
 from scipy.stats import rankdata
 import time
@@ -312,8 +313,11 @@ def recommend_full_pipeline(resume):
     # --------------------
     # 2) Phase 2  (only once)
     # --------------------
-    phase2_scores_raw, _ = phase2_recommend(resume, p1_ids)
-    phase2_scores = list(phase2_scores_raw)
+    phase2_scores_raw, phase2_ids = phase2_recommend(resume, p1_ids)
+
+    p2_map = {pid: score for pid, score in zip(phase2_ids, phase2_scores_raw)}
+
+    phase2_scores = [float(p2_map[pid]) for pid in p1_ids]
 
     update_phase2_scores(resume.id, p1_ids, phase2_scores)
     print("[Phase 2] Done.")
@@ -375,7 +379,6 @@ def recommend_full_pipeline(resume):
     }
 
 
-
 def run_full_pipeline_all():
     resumes = get_all_resumes()
     total = len(resumes)
@@ -396,10 +399,48 @@ def run_full_pipeline_all():
     total_elapsed = time.time() - start
     print("\nAll Done! Total time:", str(timedelta(seconds=int(total_elapsed))))
 
+def load_resume_subset(path="resume_subset.json"):
+    with open(path, "r") as f:
+        resume_ids = json.load(f)
+    return resume_ids
 
+def run_full_pipeline_subset():
+    # 1) Load subset IDs
+    target_ids = load_resume_subset()  
+    resumes = get_all_resumes()
+
+    # 2) Filter resumes
+    subset = [r for r in resumes if r.id in target_ids]
+
+    total = len(subset)
+    print(f"\n[INFO] Running FULL PIPELINE for {total} resumes (subset)...\n")
+
+    start_time = time.time()
+
+    # 3) Loop through resumes
+    for idx, r in enumerate(subset, 1):
+        elapsed = time.time() - start_time
+        avg_time = elapsed / idx
+        remaining = avg_time * (total - idx)
+
+        print("=" * 80)
+        print(f"[ {idx}/{total} ] Resume ID={r.id}")
+        print(f"[Elapsed]   {str(timedelta(seconds=int(elapsed)))}")
+        print(f"[ETA]       {str(timedelta(seconds=int(remaining)))}")
+        print("=" * 80)
+
+        recommend_full_pipeline(r)
+
+    # 4) Final summary
+    total_elapsed = time.time() - start_time
+    print("\n" + "=" * 80)
+    print(f"[INFO] All done! Completed {total} resumes.")
+    print(f"[Total Time] {str(timedelta(seconds=int(total_elapsed)))}")
+    print("=" * 80)
 
 if __name__ == "__main__":
     # Uncomment the test you want to run:
     #test_full_recommend()  # Original system
     #test_full_recommend_advanced()  # New advanced system
-    run_full_pipeline_all() # do everything 
+    #run_full_pipeline_all() # do everything 
+    run_full_pipeline_subset()

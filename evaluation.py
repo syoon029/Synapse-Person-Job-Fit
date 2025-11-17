@@ -1,101 +1,117 @@
 import json
-from database import get_all_resumes, get_resume_candidates 
 from typing import List, Dict, Any
+from database import get_resume_candidates
 
-def check_reranking_success(resume_id: int) -> dict:
+
+# ---------------------------------------------------------
+# Load fixed subset of resume IDs from resume_subset.json
+# ---------------------------------------------------------
+def load_resume_subset(path="resume_subset.json"):
+    try:
+        with open(path, "r") as f:
+            ids = json.load(f)
+        print(f"[OK] Loaded {len(ids)} resume IDs from {path}")
+        return ids
+    except Exception as e:
+        print(f"[ERROR] Could not load resume_subset.json: {e}")
+        return []
+
+
+# ---------------------------------------------------------
+# Helper: return the top candidate for a given score field
+# ---------------------------------------------------------
+def get_top_candidate(candidates: List[Dict[str, Any]], field: str):
+    return max(candidates, key=lambda x: x.get(field, -1.0))
+
+
+# ---------------------------------------------------------
+# Check reranking success for Phase2, LLM, Ensemble
+# ---------------------------------------------------------
+def check_reranking(resume_id: int):
     """
-    Checks if Phase 2 re-ranking successfully found a new Top 1 posting 
-    with a higher Phase 2 score than the one selected by Phase 1.
+    Returns whether each stage (P2, LLM, Ensemble) improved
+    over Phase 1 using that stage's scoring metric.
     """
-    candidates_data = get_resume_candidates(resume_id)
-    
-    if not candidates_data or not candidates_data.get("candidate_list"):
-        # Handle cases where no candidate data exists for the resume ID
-        return {"resume_id": resume_id, "success": False, "reason": "No candidate data found."}
+    data = get_resume_candidates(resume_id)
+    if not data:
+        return None
 
-    candidate_list = candidates_data["candidate_list"]
-    
-    # 1. Find Phase 1's Top 1 candidate (based on phase1_score)
-    top_p1_candidate = max(candidate_list, key=lambda x: x.get("phase1_score", -1.0))
-    
-    # 2. Find Phase 2's Top 1 candidate (based on phase2_score)
-    top_p2_candidate = max(candidate_list, key=lambda x: x.get("phase2_score", -1.0))
-    
-    # --- Extract Key Comparison Metrics ---
-    
-    # A. Phase 2 score of the candidate selected by Phase 2 (The actual highest score)
-    score_p2_top1 = top_p2_candidate.get("phase2_score", -1.0)
-    
-    # B. Phase 2 score of the candidate selected by Phase 1 (The score Phase 2 gave to P1's choice)
-    score_p1_top1_by_p2 = top_p1_candidate.get("phase2_score", -1.0)
+    cands = data["candidate_list"]
 
-    # 3. Compare for Re-ranking Success
-    # Success if P2's best score is strictly greater than the P2 score of P1's best choice.
-    reranking_successful = score_p2_top1 > score_p1_top1_by_p2
-    
-    # 4. Compile Results
-    result = {
-        "resume_id": resume_id,
-        "success": reranking_successful,
-        "Phase1_Top1_ID": top_p1_candidate["id"],
-        "Phase2_Top1_ID": top_p2_candidate["id"],
-        # Measure improvement based on P2 scores
-        "Improvement": score_p2_top1 - score_p1_top1_by_p2
+    # Get top-1 picks for each score type
+    p1 = get_top_candidate(cands, "phase1_score")
+    p2 = get_top_candidate(cands, "phase2_score")
+    llm = get_top_candidate(cands, "llm_score")
+    ens = get_top_candidate(cands, "phase2_advanced_score")
+
+    # Compute improvements relative to Phase 1
+    imp_p2 = p2["phase2_score"] - p1.get("phase2_score", -1)
+    imp_llm = llm["llm_score"] - p1.get("llm_score", -1)
+    imp_ens = ens["phase2_advanced_score"] - p1.get("phase2_advanced_score", -1)
+
+    return {
+        "p2": imp_p2 > 0,
+        "llm": imp_llm > 0,
+        "ens": imp_ens > 0
     }
-    
-    return result
 
-# --- Main function to iterate over all resumes ---
-def evaluate_all_resumes():
+
+# ---------------------------------------------------------
+# Summary evaluation for only the subset of resume IDs
+# ---------------------------------------------------------
+def evaluate_subset_summary():
     """
-    Evaluates the effectiveness of Phase 2 re-ranking for all resumes in the database.
+    Loads resume_subset.json and evaluates P2 / LLM / Ensemble
+    reranking success across only those resumes.
     """
-    # Fetch all Resume objects from the database
-    all_resumes = get_all_resumes()
-    
-    evaluation_results = []
-    
-    print(f"Starting evaluation for a total of {len(all_resumes)} resumes.")
-    
-    successful_count = 0
-    total_evaluated = 0
-    
-    for resume in all_resumes:
-        try:
-            result = check_reranking_success(resume.id)
-            
-            # Only count if the candidate data existed (i.e., not a 'reason' dictionary)
-            if "reason" not in result:
-                evaluation_results.append(result)
-                total_evaluated += 1
-                
-                if result["success"]:
-                    successful_count += 1
-                
-                # Print progress
-                status = 'SUCCESS' if result['success'] else 'FAILURE'
-                print(f"  - ID {resume.id}: {status} (Improvement: {result['Improvement']:+.4f})")
-                
-            else:
-                 print(f"  - ID {resume.id}: No data available for evaluation.")
+    target_ids = load_resume_subset()
+    print(f"\nEvaluating {len(target_ids)} resumes...\n")
+
+    total = 0
+    p2_count = 0
+    llm_count = 0
+    ens_count = 0
+
+    for rid in target_ids:
+        result = check_reranking(rid)
+        if not result:
+            continue
+
+        total += 1
+        if result["p2"]:
+            p2_count += 1
+        if result["llm"]:
+            llm_count += 1
+        if result["ens"]:
+            ens_count += 1
+
+    # ----- Final Summary -----
+    print("\n========================================")
+    print("       Comprehensive Reranking Summary")
+    print("========================================")
+    print(f"Total evaluated: {total}\n")
+
+    if total == 0:
+        print("No resumes evaluated.")
+        print("========================================\n")
+        return
+
+    print("Phase 2 Reranking:")
+    print(f"  Success count: {p2_count} / {total}")
+    print(f"  Success rate : {p2_count / total * 100:.2f}%\n")
+
+    print("LLM Reranking:")
+    print(f"  Success count: {llm_count} / {total}")
+    print(f"  Success rate : {llm_count / total * 100:.2f}%\n")
+
+    print("Ensemble (0.8/0.1/0.1):")
+    print(f"  Success count: {ens_count} / {total}")
+    print(f"  Success rate : {ens_count / total * 100:.2f}%")
+    print("========================================\n")
 
 
-        except Exception as e:
-            # Handle unexpected database or processing errors
-            print(f"  - ID {resume.id}:  ERROR - {e}")
-
-    # --- Final Summary ---
-    print("\n" + "="*50)
-    print("Final Re-ranking Effectiveness Summary")
-    print(f"Total Resumes Evaluated: {total_evaluated} samples")
-    print(f"Re-ranking Success Count (P2 Top Score > P1 Top Score): {successful_count} cases")
-    
-    if total_evaluated > 0:
-        success_rate = (successful_count / total_evaluated) * 100
-        print(f"**Re-ranking Success Rate: {success_rate:.2f}%")
-    print("="*50)
-
-    return evaluation_results
-
+# ---------------------------------------------------------
+# Main Entry
+# ---------------------------------------------------------
 if __name__ == "__main__":
-    final_results = evaluate_all_resumes()
+    evaluate_subset_summary()
