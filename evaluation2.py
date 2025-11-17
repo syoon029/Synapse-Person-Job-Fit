@@ -16,6 +16,7 @@ from embed_stage2 import embed_text, doc_sim_score
 from resume_optimization import mutate_resume
 
 TOPK_FROM_PHASE1 = 2  
+N_ITERS = 5
 
 
 def _phase2_scores_for_text(resume_text: str, candidate_ids: List[int]) -> Tuple[np.ndarray, List[int]]:
@@ -68,9 +69,10 @@ class EvalRow:
     spearman_rho: float
 
 
-def evaluate_resume_once(resume_id: int) -> Optional[EvalRow]:
+def evaluate_resume_once(resume_id: int, n_iters: int = N_ITERS) -> Optional[EvalRow]:
     """
-    On the same set of Phase-1 candidates: original vs. lightweight optimized Phase-2 comparison.
+On the same Phase-1 candidate set: original to multi-round lightweight optimization.
+Each round continues mutate based on the resume of the previous round and prints the Phase-2 results of that round.
     """
     base_text = get_resume_text(resume_id)
     if not base_text or not base_text.strip():
@@ -85,17 +87,49 @@ def evaluate_resume_once(resume_id: int) -> Optional[EvalRow]:
     scores_b, ids_b = _phase2_scores_for_text(base_text, candidate_ids)
     top1_before_id, top1_before_score = ids_b[0], float(scores_b[0])
 
-    postings_ctx = get_postings_by_ids(candidate_ids[:3]) 
-    opt_text = mutate_resume(base_text, postings_ctx)
-
-    scores_a, ids_a = _phase2_scores_for_text(opt_text, candidate_ids)
-    top1_after_id, top1_after_score = ids_a[0], float(scores_a[0])
-
     id2rank_b = {pid: rank for rank, pid in enumerate(ids_b, start=1)}
-    id2rank_a = {pid: rank for rank, pid in enumerate(ids_a, start=1)}
     ranks_before = [id2rank_b[pid] for pid in candidate_ids]
-    ranks_after  = [id2rank_a[pid] for pid in candidate_ids]
-    rho, _ = spearmanr(ranks_before, ranks_after)
+
+    print(f"  - ID {resume_id}: BASE | Top1={top1_before_id} | Score={top1_before_score:.4f}")
+
+    cur_text = base_text
+    cur_top1_score = top1_before_score
+    cur_ids = ids_b
+    id2rank_cur = id2rank_b
+
+
+    postings_ctx = get_postings_by_ids(candidate_ids[:3])
+
+    changed_any = False  
+    for it in range(1, n_iters + 1):
+        cur_text = mutate_resume(cur_text, postings_ctx)
+
+        scores_i, ids_i = _phase2_scores_for_text(cur_text, candidate_ids)
+        top1_i_id, top1_i_score = ids_i[0], float(scores_i[0])
+
+        id2rank_i = {pid: rank for rank, pid in enumerate(ids_i, start=1)}
+        ranks_i = [id2rank_i[pid] for pid in candidate_ids]
+
+        rho_vs0, _ = spearmanr(ranks_before, ranks_i)
+        rho_vsp, _ = spearmanr([id2rank_cur[pid] for pid in candidate_ids], ranks_i)
+
+        print(
+            f"      Iter {it}: Top1={top1_i_id} | Score={top1_i_score:.4f} | "
+            f"Δvs0={top1_i_score - top1_before_score:+.4f} | "
+            f"ΔvsPrev={top1_i_score - cur_top1_score:+.4f} | "
+            f"Top1ChangedFrom0={'YES' if top1_i_id != top1_before_id else 'no'} | "
+            f"ρ(vs0)={float(rho_vs0) if rho_vs0 is not None else float('nan'):.3f} | "
+            f"ρ(vsPrev)={float(rho_vsp) if rho_vsp is not None else float('nan'):.3f}"
+        )
+
+        if top1_i_id != top1_before_id:
+            changed_any = True
+        cur_top1_score = top1_i_score
+        cur_ids = ids_i
+        id2rank_cur = id2rank_i
+
+    top1_after_id, top1_after_score = cur_ids[0], cur_top1_score
+    rho_final, _ = spearmanr(ranks_before, [id2rank_cur[pid] for pid in candidate_ids])
 
     return EvalRow(
         resume_id=resume_id,
@@ -103,11 +137,12 @@ def evaluate_resume_once(resume_id: int) -> Optional[EvalRow]:
         top1_before_id=top1_before_id,
         top1_before_score=top1_before_score,
         top1_after_id=top1_after_id,
-        top1_after_score=top1_after_score,
-        top1_changed=(top1_before_id != top1_after_id),
-        top1_score_delta=(top1_after_score - top1_before_score),
-        spearman_rho=float(rho) if rho is not None else float("nan"),
+        top1_after_score=float(top1_after_score),
+        top1_changed=(top1_after_id != top1_before_id),
+        top1_score_delta=float(top1_after_score - top1_before_score),
+        spearman_rho=float(rho_final) if rho_final is not None else float("nan"),
     )
+
 
 
 def evaluate_all_resumes_optimization():
