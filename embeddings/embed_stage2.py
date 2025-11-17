@@ -7,7 +7,7 @@ from sqlalchemy import create_engine, select
 from sqlalchemy.orm import Session
 from transformers import AutoTokenizer, AutoModel, RobertaTokenizer, RobertaModel
 
-from database import Posting, Resume
+from infrastructure.database import Posting, Resume
 
 _EMBED_MODEL = 'roberta-base'
 

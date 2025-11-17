@@ -2,9 +2,9 @@ import json
 import numpy as np
 import pandas as pd
 import faiss
-from database import Posting, Resume
-from embed import embed_posting, embed_resume_text, _safe_join
-from embed_stage2 import embed_text, doc_sim_score
+from infrastructure.database import Posting, Resume
+from embeddings.embed import embed_posting, embed_resume_text, _safe_join
+from embeddings.embed_stage2 import embed_text, doc_sim_score
 from typing import List, Dict, Any
 from scipy.stats import rankdata
 

@@ -10,7 +10,7 @@ import random
 # --- External Library: Sentence Transformer for Title Embeddings ---
 from sentence_transformers import SentenceTransformer
 # --- Database functions ---
-from database import get_all_resumes, get_resume_candidates, get_posting_by_id, Posting, Resume 
+from infrastructure.database import get_all_resumes, get_resume_candidates, get_posting_by_id
 
 # --- GLOBAL MODEL SETUP ---
 _EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
@@ -22,9 +22,6 @@ except Exception as e:
     print(f"FATAL ERROR: Failed to load SentenceTransformer. Error: {e}")
 
 
-# ------------------------------------------------------------
-# NEW: Load target resume IDs from resume_subset.json
-# ------------------------------------------------------------
 def load_target_ids(path="resume_subset.json"):
     """
     Loads the list of resume IDs from resume_subset.json.
@@ -39,10 +36,6 @@ def load_target_ids(path="resume_subset.json"):
         print(f"[ERROR] Failed to load resume_subset.json: {e}")
         return []
 
-
-# --------------------------------------------------------------------------------
-# A. HELPER FUNCTIONS
-# --------------------------------------------------------------------------------
 
 def get_random_resumes(n=5):
     resumes = get_all_resumes()

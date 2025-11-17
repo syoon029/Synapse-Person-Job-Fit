@@ -1,6 +1,6 @@
 import json
 from typing import List, Dict, Any
-from database import get_resume_candidates
+from infrastructure.database import get_resume_candidates
 
 def load_resume_subset(path="resume_subset.json"):
     try:
@@ -44,9 +44,6 @@ def check_reranking(resume_id: int):
     }
 
 
-# ---------------------------------------------------------
-# Summary evaluation for only the subset of resume IDs
-# ---------------------------------------------------------
 def evaluate_subset_summary():
     """
     Loads resume_subset.json and evaluates P2 / LLM / Ensemble

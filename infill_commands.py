@@ -1,5 +1,5 @@
-from database import init_db, Posting, import_postings_from_csv, import_resumes_from_csv
-from index import init_faiss_index
+from infrastructure.database import init_db, Posting, import_postings_from_csv, import_resumes_from_csv
+from infrastructure.index import init_faiss_index
 
 def setup_database():
     """

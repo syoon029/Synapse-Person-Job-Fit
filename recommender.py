@@ -1,7 +1,7 @@
-from embed import embed_resume_text, _safe_join
-from embed_stage2 import embed_text, doc_sim_score
-from index import search_faiss
-from database import get_postings_by_ids, get_all_resumes, save_resume_candidates, update_phase2_scores,  update_phase2_advanced_scores, update_llm_scores
+from embeddings.embed import embed_resume_text, _safe_join
+from embeddings.embed_stage2 import embed_text, doc_sim_score
+from infrastructure.index import search_faiss
+from infrastructure.database import get_postings_by_ids, get_all_resumes, save_resume_candidates, update_phase2_scores,  update_phase2_advanced_scores, update_llm_scores
 from llm_scorer import load_cache, pairwise_rank_to_scores
 import random
 import timeit
@@ -211,8 +211,6 @@ def phase2_recommend_advanced(resume, candidate_ids):
     print(f"[Phase 2 Advanced] Complete. Top posting ID: {final_ids[0]} with score: {final_scores[0]:.4f}")
     
     return final_scores, final_ids
-
-# --- Utility Functions ---
 
 def get_random_resumes(n=5):
     resumes = get_all_resumes()
@@ -441,6 +439,6 @@ def run_full_pipeline_subset():
 if __name__ == "__main__":
     # Uncomment the test you want to run:
     #test_full_recommend()  # Original system
-    #test_full_recommend_advanced()  # New advanced system
+    test_full_recommend_advanced()  # New advanced system
     #run_full_pipeline_all() # do everything 
-    run_full_pipeline_subset()
+    # run_full_pipeline_subset()

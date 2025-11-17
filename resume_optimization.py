@@ -2,11 +2,11 @@ import re
 import random
 from time import sleep
 from recommender import get_random_resumes, phase1_recommend
-from llm_starter_code import get_response
-from database import get_postings_by_ids
-from embed import embed_resume_text, embed_posting, _safe_join
-from embed_stage2 import embed_text, doc_sim_score
-from index import compute_l2_distance
+from infrastructure.llm_starter_code import get_response
+from infrastructure.database import get_postings_by_ids
+from embeddings.embed import embed_resume_text, embed_posting, _safe_join
+from embeddings.embed_stage2 import embed_text, doc_sim_score
+from infrastructure.index import compute_l2_distance
 from llm_scorer import load_cache, pairwise_rank_to_scores
 import numpy as np
 import json

@@ -8,7 +8,7 @@ from typing import List
 
 # Deps from local modules
 from recommender import phase1_recommend, phase2_recommend
-from database import get_postings_by_ids, Resume
+from infrastructure.database import get_postings_by_ids, Resume
 from resume_optimization import run_evolution
 from explainability_rag import explain_recommendation
 

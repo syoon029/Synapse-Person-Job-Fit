@@ -10,13 +10,13 @@ from typing import List, Optional, Dict
 import numpy as np
 from scipy.stats import spearmanr
 
-from database import (
+from infrastructure.database import (
     get_resume_text,
     get_resume_candidates,
     get_postings_by_ids,
 )
-from embed import _safe_join
-from embed_stage2 import embed_text, doc_sim_score
+from embeddings.embed import _safe_join
+from embeddings.embed_stage2 import embed_text, doc_sim_score
 from resume_optimization import mutate_resume
 
 
