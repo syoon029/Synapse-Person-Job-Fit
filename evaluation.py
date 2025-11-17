@@ -2,10 +2,6 @@ import json
 from typing import List, Dict, Any
 from database import get_resume_candidates
 
-
-# ---------------------------------------------------------
-# Load fixed subset of resume IDs from resume_subset.json
-# ---------------------------------------------------------
 def load_resume_subset(path="resume_subset.json"):
     try:
         with open(path, "r") as f:
@@ -16,17 +12,9 @@ def load_resume_subset(path="resume_subset.json"):
         print(f"[ERROR] Could not load resume_subset.json: {e}")
         return []
 
-
-# ---------------------------------------------------------
-# Helper: return the top candidate for a given score field
-# ---------------------------------------------------------
 def get_top_candidate(candidates: List[Dict[str, Any]], field: str):
     return max(candidates, key=lambda x: x.get(field, -1.0))
 
-
-# ---------------------------------------------------------
-# Check reranking success for Phase2, LLM, Ensemble
-# ---------------------------------------------------------
 def check_reranking(resume_id: int):
     """
     Returns whether each stage (P2, LLM, Ensemble) improved

@@ -8,15 +8,10 @@ from embed_stage2 import embed_text, doc_sim_score
 from typing import List, Dict, Any
 from scipy.stats import rankdata
 
-# --- ADDED: Import for nDCG calculation ---
 from sklearn.metrics import ndcg_score
-# --- ADDED: Import for normalization ---
 from sklearn.preprocessing import minmax_scale, StandardScaler
-# ----------------------------------------
 
-# --- MODIFIED: Import pairwise ranking function ---
 from llm_scorer import load_cache, pairwise_rank_to_scores
-# ---------------------------------------------
 
 def read_ansel_resume(file_path='resume_data/ansel_resume.csv'):
     df = pd.read_csv(file_path)
