@@ -14,15 +14,16 @@ from scipy.stats import rankdata
 
 # --- Tunable Parameters ---
 
-N_CANDIDATES = 6 # Population Size: Number of candidate resumes in each generation
-N_ITERATIONS = 3 # Generations: Number of evolution iterations to run
-N_ELITE = 2 # Elitism: Number of top candidates to keep directly in the next generation
+N_CANDIDATES = 10 # Population Size: Increased for more diversity
+N_ITERATIONS = 5 # Generations: More iterations for better convergence
+N_ELITE = 2 # Elitism: Reduced to allow more new blood
 TOURNAMENT_SIZE = 3 # Tournament Size: Number of candidates in a selection tournament
-MUTATION_RATE = 0.20 # Mutation Rate: Probability that a new child will be mutated
+MUTATION_RATE = 0.7 # Mutation Rate: Increased for more exploration
+MUTATION_STRENGTH = "medium" # 'light', 'medium', or 'aggressive'
 LLM_MODEL = "models/gemini-2.0-flash" # LLM Model: The model used for scoring and mutation
 
 # Fitness calculation method: 'simple', 'phase2', or 'advanced'
-FITNESS_METHOD = 'advanced'  # 'simple' = Phase 1 only, 'phase2' = Phase 1 + Phase 2, 'advanced' = Full ensemble
+FITNESS_METHOD = 'simple'  # 'simple' = Phase 1 only, 'phase2' = Phase 1 + Phase 2, 'advanced' = Full ensemble
 
 # --- Global cache for LLM pairwise comparisons ---
 LLM_CACHE = None
@@ -36,35 +37,83 @@ def initialize_llm_cache():
         print(f"[Fitness] Loaded {len(LLM_CACHE)} cached comparisons")
 
 # --- Prompt Templates ---
-MUTATION_PROMPT_TEMPLATE = """
-**Role:** AI Resume Editor (Mutation Operator)
+MUTATION_PROMPTS = {
+    'light': """**Role:** AI Resume Editor
 
-**Task:** Make *one small, targeted improvement* to the provided resume to increase its "fit score" for the target job postings.
+**Task:** Make 1-2 small improvements to this resume for the target jobs.
 
-**Base Resume:**
+**Resume:**
 ---
 {resume_text}
 ---
 
-**Target Job Postings (for context):**
+**Target Jobs:**
 ---
 {job_context}
 ---
 
 **Instructions:**
-1.  Review the resume and the target jobs.
-2.  Identify *one* small change to make. Examples:
-    - Rephrase a bullet point in the "Experience" section to use stronger action verbs and metrics.
-    - Slightly tweak the "Summary" to include keywords from the job postings.
-    - Adjust the ordering or emphasis of a skill in the "Skills" section.
-3.  Apply this single change to the resume.
-4.  Return the *entire, updated* resume text. **Do not** provide any explanation, preamble, or commentary. Output *only* the full resume.
-"""
+- Make 1-2 targeted changes (stronger verbs, add metrics, reorder skills, add relevant keywords)
+- Keep the overall structure the same
+- Return ONLY the complete updated resume, no explanation
 
-CROSSOVER_PROMPT_TEMPLATE = """
-**Role:** AI Resume Editor (Crossover Operator)
+**Updated Resume:**""",
+    
+    'medium': """**Role:** AI Resume Editor
 
-**Task:** Create a new, stronger "child" resume by combining the *best* parts of two "parent" resumes. The child resume must be coherent and effective.
+**Task:** Significantly improve this resume for the target jobs while maintaining the core experience.
+
+**Resume:**
+---
+{resume_text}
+---
+
+**Target Jobs:**
+---
+{job_context}
+---
+
+**Instructions:**
+- Make 3-5 substantial improvements:
+  * Rewrite bullets with stronger action verbs and quantifiable achievements
+  * Add 2-3 keywords from job descriptions that match the candidate's experience
+  * Reorganize or expand the skills section to highlight relevant expertise
+  * Enhance the summary to better align with target roles
+- The experience must remain truthful but can be reframed/re-emphasized
+- Return ONLY the complete updated resume, no explanation
+
+**Updated Resume:**""",
+    
+    'aggressive': """**Role:** AI Resume Editor
+
+**Task:** Dramatically transform this resume to maximize fit with target jobs.
+
+**Resume:**
+---
+{resume_text}
+---
+
+**Target Jobs:**
+---
+{job_context}
+---
+
+**Instructions:**
+- Make major improvements:
+  * Completely rewrite the summary section to align with target roles
+  * Reframe ALL experience bullets using keywords and phrases from job postings
+  * Add a skills section with 8-10 relevant technical/domain skills mentioned in jobs
+  * Reorganize sections to highlight most relevant experience first
+  * Add 1-2 relevant achievements with metrics if the experience supports it
+- Stay truthful but maximize emphasis on relevant aspects
+- Return ONLY the complete updated resume, no explanation
+
+**Updated Resume:**"""
+}
+
+CROSSOVER_PROMPT_TEMPLATE = """**Role:** AI Resume Editor
+
+**Task:** Create a superior resume by intelligently combining these two resumes.
 
 **Parent Resume A:**
 ---
@@ -76,18 +125,23 @@ CROSSOVER_PROMPT_TEMPLATE = """
 {resume_b}
 ---
 
-**Target Job Postings (for context):**
+**Target Jobs:**
 ---
 {job_context}
 ---
 
 **Instructions:**
-1.  Analyze both parent resumes and the target job context.
-2.  Identify the strongest *sections* (e.g., Summary, a specific Experience entry, Skills section) from each parent.
-3.  Construct a *new, single, coherent resume* by merging these best parts. For example, you might take the Summary from Parent A, the Experience from Parent B, and the Skills section from Parent A.
-4.  Ensure the final resume is well-formatted and does not duplicate information.
-5.  Return the *entire, updated* child resume. **Do not** provide any explanation, preamble, or commentary. Output *only* the full resume.
-"""
+1. Take the BEST elements from each parent:
+   - Best summary statement
+   - Strongest experience descriptions
+   - Most comprehensive skills list
+   - Best formatting approach
+2. Create ONE coherent, non-redundant resume
+3. The result should be noticeably different from both parents
+4. Ensure professional formatting and flow
+5. Return ONLY the complete child resume, no explanation
+
+**Child Resume:**"""
 
 def _format_postings_for_prompt(postings: list) -> str:
     """Creates a concise summary of job postings for the prompts."""
@@ -253,35 +307,72 @@ def calculate_fitness(resume_text: str, postings: list) -> float:
     print(f"   -> Fitness: {fitness:.4f}")
     return fitness
 
+def resume_similarity(resume_a: str, resume_b: str) -> float:
+    """Calculate similarity between two resumes (simple word overlap)."""
+    words_a = set(resume_a.lower().split())
+    words_b = set(resume_b.lower().split())
+    if not words_a or not words_b:
+        return 0.0
+    intersection = len(words_a & words_b)
+    union = len(words_a | words_b)
+    return intersection / union if union > 0 else 0.0
+
 # --- Genetic Operators ---
 
-def mutate_resume(base_resume_text: str, postings: list) -> str:
+def mutate_resume(base_resume_text: str, postings: list, strength: str = MUTATION_STRENGTH) -> str:
     """
     Uses the LLM to create a "mutated" version of the base resume.
+    Now with variable mutation strength.
     """
-    print("    Mutating resume...")
+    print(f"    Mutating resume ({strength})...")
     job_context = _format_postings_for_prompt(postings)
-    prompt = MUTATION_PROMPT_TEMPLATE.format(
+    prompt = MUTATION_PROMPTS[strength].format(
         resume_text=base_resume_text,
         job_context=job_context
     )
 
-    try:
-        mutated_resume = get_response(LLM_MODEL, prompt, logging=False)
-        if len(mutated_resume) < 0.5 * len(base_resume_text):
-             print(f"   [!] Mutation failed, response too short. Re-using parent.")
-             return base_resume_text
-        return mutated_resume
-    except Exception as e:
-        print(f"   [!] LLM call failed for mutation: {e}. Re-using parent.")
-        sleep(1)
-        return base_resume_text
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            mutated_resume = get_response(LLM_MODEL, prompt, logging=False)
+            
+            # Validation: check length and diversity
+            min_length = 0.3 * len(base_resume_text)
+            similarity = resume_similarity(base_resume_text, mutated_resume)
+            
+            if len(mutated_resume) < min_length:
+                print(f"   [!] Attempt {attempt+1}: Response too short ({len(mutated_resume)} < {min_length:.0f})")
+                if attempt < max_retries - 1:
+                    continue
+                return base_resume_text
+            
+            if similarity > 0.95:
+                print(f"   [!] Attempt {attempt+1}: Mutation too similar ({similarity:.2f})")
+                if attempt < max_retries - 1:
+                    # Try more aggressive mutation
+                    if strength == 'light':
+                        prompt = MUTATION_PROMPTS['medium'].format(
+                            resume_text=base_resume_text, job_context=job_context)
+                    continue
+                return base_resume_text
+            
+            print(f"   [✓] Mutation successful (similarity: {similarity:.2f})")
+            return mutated_resume
+            
+        except Exception as e:
+            print(f"   [!] Attempt {attempt+1} failed: {e}")
+            if attempt < max_retries - 1:
+                sleep(1)
+            else:
+                return base_resume_text
+    
+    return base_resume_text
 
 def crossover_resumes(resume_a: str, resume_b: str, postings: list) -> str:
     """
     Uses the LLM to create a "child" resume by combining two parents.
     """
-    print("    Crossover...", end=" ")
+    print("    Crossover...")
     job_context = _format_postings_for_prompt(postings)
     prompt = CROSSOVER_PROMPT_TEMPLATE.format(
         resume_a=resume_a,
@@ -289,23 +380,47 @@ def crossover_resumes(resume_a: str, resume_b: str, postings: list) -> str:
         job_context=job_context
     )
 
-    try:
-        child_resume = get_response(LLM_MODEL, prompt, logging=False)
-        if len(child_resume) < 0.5 * min(len(resume_a), len(resume_b)):
-            print(f"   [!] Crossover failed, response too short. Using Parent A.")
-            return resume_a
-        print("Done.")
-        return child_resume
-    except Exception as e:
-        print(f"   [!] LLM call failed for crossover: {e}. Using Parent A.")
-        sleep(1)
-        return resume_a
+    max_retries = 2
+    for attempt in range(max_retries):
+        try:
+            child_resume = get_response(LLM_MODEL, prompt, logging=False)
+            
+            min_length = 0.3 * min(len(resume_a), len(resume_b))
+            sim_a = resume_similarity(resume_a, child_resume)
+            sim_b = resume_similarity(resume_b, child_resume)
+            
+            if len(child_resume) < min_length:
+                print(f"   [!] Attempt {attempt+1}: Child too short")
+                if attempt < max_retries - 1:
+                    continue
+                return resume_a
+            
+            # Child should be different from both parents
+            if sim_a > 0.95 and sim_b > 0.95:
+                print(f"   [!] Attempt {attempt+1}: Child too similar to parents")
+                if attempt < max_retries - 1:
+                    continue
+                return resume_a
+            
+            print(f"   [✓] Crossover successful (sim_a: {sim_a:.2f}, sim_b: {sim_b:.2f})")
+            return child_resume
+            
+        except Exception as e:
+            print(f"   [!] Attempt {attempt+1} failed: {e}")
+            if attempt < max_retries - 1:
+                sleep(1)
+            else:
+                return resume_a
+    
+    return resume_a
 
 def _select_parent(population: list) -> dict:
     """
     Selects a parent from the population using tournament selection.
+    Now with proper fitness-based selection.
     """
-    tournament = random.sample(population, TOURNAMENT_SIZE)
+    tournament = random.sample(population, min(TOURNAMENT_SIZE, len(population)))
+    # Sort by fitness and pick the best
     tournament.sort(key=lambda x: x['fitness'], reverse=True)
     return tournament[0]
 
@@ -318,7 +433,8 @@ def run_evolution(base_resume: str, target_postings: list):
     print("--- Starting Resume Evolution ---")
     print(f"Fitness Method: {FITNESS_METHOD.upper()}")
     print(f"Population: {N_CANDIDATES} | Generations: {N_ITERATIONS} | Elites: {N_ELITE}")
-    print(f"Mutation Rate: {MUTATION_RATE*100}% | Tournament Size: {TOURNAMENT_SIZE}")
+    print(f"Mutation Rate: {MUTATION_RATE*100}% | Mutation Strength: {MUTATION_STRENGTH}")
+    print(f"Tournament Size: {TOURNAMENT_SIZE}")
     print(f"Targeting {len(target_postings)} Job Postings.")
 
     population = []
@@ -330,10 +446,12 @@ def run_evolution(base_resume: str, target_postings: list):
     base_fitness = calculate_fitness(base_resume, target_postings)
     population.append({"resume": base_resume, "fitness": base_fitness})
 
-    # Create the rest of the initial population by mutating the base resume
+    # Create diverse initial population with varying mutation strengths
+    strengths = ['light', 'medium', 'aggressive']
     for i in range(N_CANDIDATES - 1):
         print(f"  Creating initial candidate {i+2}/{N_CANDIDATES}...")
-        mutant_resume = mutate_resume(base_resume, target_postings)
+        strength = strengths[i % len(strengths)]
+        mutant_resume = mutate_resume(base_resume, target_postings, strength=strength)
         mutant_fitness = calculate_fitness(mutant_resume, target_postings)
         population.append({"resume": mutant_resume, "fitness": mutant_fitness})
 
@@ -344,10 +462,11 @@ def run_evolution(base_resume: str, target_postings: list):
         # Sort by fitness (highest first) for elitism and reporting
         population.sort(key=lambda x: x['fitness'], reverse=True)
 
-        # Print stats
+        # Print stats with more detail
         best_fitness = population[0]['fitness']
+        worst_fitness = population[-1]['fitness']
         avg_fitness = sum(c['fitness'] for c in population) / len(population)
-        print(f"  Stats (Gen {gen-1}): Best Fitness={best_fitness:.4f}, Avg Fitness={avg_fitness:.4f}")
+        print(f"  Stats (Gen {gen-1}): Best={best_fitness:.4f}, Avg={avg_fitness:.4f}, Worst={worst_fitness:.4f}")
 
         new_population = []
 
@@ -361,16 +480,29 @@ def run_evolution(base_resume: str, target_postings: list):
         
         for i in range(n_to_generate):
             print(f"    Child {i+1}/{n_to_generate}:")
-            # Select two parents
+            # Select two parents (ensure they're different)
             parent_a = _select_parent(population)
             parent_b = _select_parent(population)
+            
+            # Ensure different parents for crossover
+            attempts = 0
+            while parent_a == parent_b and attempts < 5:
+                parent_b = _select_parent(population)
+                attempts += 1
             
             # **Crossover:**
             child_resume = crossover_resumes(parent_a['resume'], parent_b['resume'], target_postings)
             
-            # **Mutation:**
+            # **Mutation:** with adaptive strength based on generation
             if random.random() < MUTATION_RATE:
-                child_resume = mutate_resume(child_resume, target_postings)
+                # Later generations use more aggressive mutations
+                if gen >= N_ITERATIONS * 0.7:
+                    strength = 'aggressive'
+                elif gen >= N_ITERATIONS * 0.4:
+                    strength = 'medium'
+                else:
+                    strength = MUTATION_STRENGTH
+                child_resume = mutate_resume(child_resume, target_postings, strength=strength)
             
             # Score the new child and add to population
             child_fitness = calculate_fitness(child_resume, target_postings)
@@ -382,11 +514,14 @@ def run_evolution(base_resume: str, target_postings: list):
     print("\n--- Evolution Complete ---")
     population.sort(key=lambda x: x['fitness'], reverse=True)
     
+    # Select best candidate
     best_candidate = population[0]
     best_fitness = best_candidate['fitness']
     avg_fitness = sum(c['fitness'] for c in population) / len(population)
+    improvement = ((best_fitness - base_fitness) / base_fitness * 100) if base_fitness > 0 else 0
 
     print(f"  Final Stats: Best Fitness={best_fitness:.4f}, Avg Fitness={avg_fitness:.4f}")
+    print(f"  Improvement over base: {improvement:+.1f}%")
     
     return best_candidate
 

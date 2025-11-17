@@ -21,3 +21,5 @@ linkedin_data/full_postings.csv
 
 sample.txt
 llm_pairwise_cache.json
+*.json
+*.txt
