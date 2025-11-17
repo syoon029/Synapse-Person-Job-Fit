@@ -6,6 +6,18 @@ from llm_starter_code import get_response
 from llm_logging import _append_jsonl
 
 
+def load_target_ids(path="resume_subset.json") -> List[int]:
+    """Load resume IDs from JSON file."""
+    try:
+        with open(path, "r") as f:
+            ids = json.load(f)
+        print(f"[OK] Loaded {len(ids)} target resume IDs")
+        return ids
+    except Exception as e:
+        print(f"[ERROR] Failed to load resume_subset.json: {e}")
+        return []
+    
+
 def _safe_snip(text: str | None, n: int = 400) -> str:
     """Return a short preview of text; handle None safely."""
     if not text:
@@ -36,7 +48,12 @@ def retrieve_candidates_from_resume(resume_id: int) -> Tuple[Dict[int, Any], Dic
         raise ValueError(f"No candidate data found for resume_id={resume_id}")
 
     # sort and slice to top-3
-    candidates = sorted(entry["candidate_list"], key=lambda x: x["score"], reverse=True)[:3]
+    candidates = sorted(
+        entry["candidate_list"],
+        key=lambda x: x.get("phase2_advanced_score", -1.0),
+        reverse=True
+    )[:3]
+    
     entry["candidate_list"] = candidates
 
     # fetch posting info
@@ -61,22 +78,22 @@ def build_rag_context(resume_text: str, id2posting: Dict[int, Any], entry: Dict[
     # Top-1 candidate
     top = candidates[0]
     top_post = id2posting.get(top["id"])
-    if not top_post:
-        raise RuntimeError(f"Posting {top['id']} not found in DB")
 
     ctx = []
     ctx.append(f"Resume:\n{_safe_snip(resume_text, 1200)}\n")
+
+    # Top-1
     ctx.append(
-        f"Top-1 Job:\n"
+        f"Top-1 Job (Ensemble Score):\n"
         f"- Title: {top_post.title or ''}\n"
         f"- Company: {top_post.company_name or ''}\n"
-        f"- Score: {top['score']:.3f}\n"
+        f"- Ensemble Score: {top.get('phase2_advanced_score', 0):.3f}\n"
         f"- Description: {_safe_snip(top_post.description, 500)}\n\n"
     )
 
-    # Add other candidates (top 2,3)
+    # Other top candidates
     if len(candidates) > 1:
-        ctx.append("Other Top Candidates (for comparison):\n")
+        ctx.append("Other Top Candidates (Ensemble ranking):\n")
         for c in candidates[1:]:
             job = id2posting.get(c["id"])
             if not job:
@@ -84,7 +101,7 @@ def build_rag_context(resume_text: str, id2posting: Dict[int, Any], entry: Dict[
             ctx.append(
                 f"- Title: {job.title or ''}\n"
                 f"  Company: {job.company_name or ''}\n"
-                f"  Score: {c['score']:.3f}\n"
+                f"  Ensemble Score: {c.get('phase2_advanced_score', 0):.3f}\n"
                 f"  Description: {_safe_snip(job.description, 320)}\n"
             )
 
@@ -260,4 +277,18 @@ def explain_recommendation(resume_text: str, postings: List[Any]) -> str:
 
 
 if __name__ == "__main__":
-    print(explain_resume(resume_id=62312955)) # test with id in DB
+    target_ids = load_target_ids()
+
+    # Only first 5 for testing
+    test_ids = target_ids[:5]
+    print(f"Running explanation on resumes: {test_ids}")
+
+    for rid in test_ids:
+        print("\n====================================================")
+        print(f"EXPLANATION FOR RESUME {rid}")
+        print("====================================================")
+        try:
+            explanation = explain_resume(rid)
+            print(explanation)
+        except Exception as e:
+            print(f"[ERROR] Failed for resume {rid}: {e}")
