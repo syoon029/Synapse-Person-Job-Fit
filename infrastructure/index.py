@@ -1,6 +1,6 @@
 import faiss
 import numpy as np
-from database import get_all_postings, embed_all_postings
+from .database import get_all_postings, embed_all_postings
 import json
 import time
 

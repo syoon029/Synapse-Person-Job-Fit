@@ -3,7 +3,7 @@ import time
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 from openai import OpenAI
-from llm_logging import _append_jsonl, read_logged_responses
+from .llm_logging import _append_jsonl, read_logged_responses
 
 # Load environment variables from .env file
 UTC = timezone.utc

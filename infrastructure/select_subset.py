@@ -1,5 +1,5 @@
 import json, random
-from database import get_all_resumes
+from .database import get_all_resumes
 
 def create_resume_subset(n=100, seed=42, out_path="resume_subset.json"):
     resumes = get_all_resumes()

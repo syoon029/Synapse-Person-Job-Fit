@@ -1,9 +1,9 @@
 import json
 from typing import Dict, Any, Tuple, List
 
-from database import get_postings_by_ids, get_resume_candidates, get_resume_text # DB helpers
-from llm_starter_code import get_response
-from llm_logging import _append_jsonl
+from infrastructure.database import get_postings_by_ids, get_resume_candidates, get_resume_text # DB helpers
+from infrastructure.llm_starter_code import get_response
+from infrastructure.llm_logging import _append_jsonl
 
 
 def load_target_ids(path="resume_subset.json") -> List[int]:

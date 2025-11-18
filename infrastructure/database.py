@@ -1,8 +1,7 @@
 import os
-from sqlalchemy import create_engine, Column, Integer, String, ForeignKey, Float, select, Text, UniqueConstraint 
-from sqlalchemy.orm import sessionmaker, relationship, Session, declarative_base
-from sqlalchemy.exc import IntegrityError, SQLAlchemyError
-from embed import embed_posting
+from sqlalchemy import create_engine, Column, Integer, String, Float, Text 
+from sqlalchemy.orm import sessionmaker, Session, declarative_base
+from embeddings.embed import embed_posting
 import json
 import pandas as pd
 

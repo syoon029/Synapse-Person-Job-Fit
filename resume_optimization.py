@@ -2,11 +2,11 @@ import re
 import random
 from time import sleep
 from recommender import get_random_resumes, phase1_recommend
-from llm_starter_code import get_response
-from database import get_postings_by_ids
-from embed import embed_resume_text, embed_posting, _safe_join
-from embed_stage2 import embed_text, doc_sim_score
-from index import compute_l2_distance
+from infrastructure.llm_starter_code import get_response
+from infrastructure.database import get_postings_by_ids
+from embeddings.embed import embed_resume_text, embed_posting, _safe_join
+from embeddings.embed_stage2 import embed_text, doc_sim_score
+from infrastructure.index import compute_l2_distance
 from llm_scorer import load_cache, pairwise_rank_to_scores
 import numpy as np
 import json
@@ -14,7 +14,7 @@ from scipy.stats import rankdata
 
 # --- Tunable Parameters ---
 
-N_CANDIDATES = 10 # Population Size: Increased for more diversity
+N_CANDIDATES = 8 # Population Size: Increased for more diversity
 N_ITERATIONS = 5 # Generations: More iterations for better convergence
 N_ELITE = 2 # Elitism: Reduced to allow more new blood
 TOURNAMENT_SIZE = 3 # Tournament Size: Number of candidates in a selection tournament
@@ -426,7 +426,7 @@ def _select_parent(population: list) -> dict:
 
 # --- Main Evolution Loop ---
 
-def run_evolution(base_resume: str, target_postings: list):
+def run_evolution(base_resume: str, target_postings: list, return_history = False):
     """
     Main evolutionary loop.
     """
@@ -445,6 +445,9 @@ def run_evolution(base_resume: str, target_postings: list):
     # Add the base resume
     base_fitness = calculate_fitness(base_resume, target_postings)
     population.append({"resume": base_resume, "fitness": base_fitness})
+
+    best_fitnesses = [base_fitness]
+    avg_fitnesses = [base_fitness]
 
     # Create diverse initial population with varying mutation strengths
     strengths = ['light', 'medium', 'aggressive']
@@ -466,17 +469,20 @@ def run_evolution(base_resume: str, target_postings: list):
         best_fitness = population[0]['fitness']
         worst_fitness = population[-1]['fitness']
         avg_fitness = sum(c['fitness'] for c in population) / len(population)
+
+        best_fitnesses.append(best_fitness)
+        avg_fitnesses.append(avg_fitness)
         print(f"  Stats (Gen {gen-1}): Best={best_fitness:.4f}, Avg={avg_fitness:.4f}, Worst={worst_fitness:.4f}")
 
         new_population = []
 
         # **Elitism:** Keep the top N_ELITE candidates
-        print(f"  Copying {N_ELITE} elite candidates...")
+        # print(f"  Copying {N_ELITE} elite candidates...")
         new_population.extend(population[:N_ELITE])
 
         # **Crossover & Mutation:** Fill the rest of the generation
         n_to_generate = N_CANDIDATES - N_ELITE
-        print(f"  Generating {n_to_generate} new children via crossover/mutation...")
+        # print(f"  Generating {n_to_generate} new children via crossover/mutation...")
         
         for i in range(n_to_generate):
             print(f"    Child {i+1}/{n_to_generate}:")
@@ -522,32 +528,100 @@ def run_evolution(base_resume: str, target_postings: list):
 
     print(f"  Final Stats: Best Fitness={best_fitness:.4f}, Avg Fitness={avg_fitness:.4f}")
     print(f"  Improvement over base: {improvement:+.1f}%")
-    
+    if return_history:
+        return best_candidate, best_fitnesses, avg_fitnesses
     return best_candidate
 
 
 if __name__ == "__main__":
+    NUM_RESUMES_TO_EVALUATE = 10
     # 1. Setup
-    resume = get_random_resumes(n=1)[0]
-    scores, ids = phase1_recommend(resume)
-    
-    # Target postings: top 3 from phase1 results
-    target_posting_ids = ids[:3]
-    postings = get_postings_by_ids(target_posting_ids)
-    
-    print(f"Target Posting IDs for optimization: {target_posting_ids}")
-    preview = resume.text[:100].replace("\n", " ")
-    print(f"Base resume (first 100 chars): {preview}...")
-    print("-" * 30)
+    resumes = get_random_resumes(n=NUM_RESUMES_TO_EVALUATE)
 
-    # 2. Run the optimization algorithm
-    best_result = run_evolution(
-        base_resume=resume.text,
-        target_postings=postings
-    )
+    best_fitnesses_all = []
+    avg_fitnesses_all = []
+    for resume in resumes:
+        scores, ids = phase1_recommend(resume)
+        target_posting_ids = ids[:3]
+        postings = get_postings_by_ids(target_posting_ids)
+        
+        print(f"Target Posting IDs for optimization: {target_posting_ids}")
+        preview = resume.text[:100].replace("\n", " ")
+        print(f"Base resume (first 100 chars): {preview}...")
+        print("-" * 30)
 
-    # 3. Print the final, optimized resume
-    print("\n" + "="*50)
-    print(f"Best Resume Found (Fitness: {best_result['fitness']:.4f})")
-    print("="*50)
-    print(best_result['resume'])
+        # 2. Run the optimization algorithm
+        best_result, best_fitnesses, avg_fitnesses = run_evolution(
+            base_resume=resume.text,
+            target_postings=postings,
+            return_history=True
+        )
+        best_fitnesses_all.append(best_fitnesses)
+        avg_fitnesses_all.append(avg_fitnesses)
+
+        # 3. Print the final, optimized resume
+        print("\n" + "="*50)
+        print(f"Best Resume Found (Fitness: {best_result['fitness']:.4f})")
+        print("="*50)
+        if NUM_RESUMES_TO_EVALUATE == 1:
+            print(best_result['resume'])
+    
+    # Display history analytics across resumes.
+    # ITERATION | AVG BEST FITNESS | AVG AVG FITNESS | IMPROVEMENT \delta \ IMPROVEMENT over BASE | MINMAX NORAMLIZED BEST FITNESS
+
+    # save history to csv
+    with open("evolution_history.csv", "w") as f:
+        # write the full histories
+        f.write("Resume_Index,Generation,Best_Fitness,Avg_Fitness\n")
+        for i in range(NUM_RESUMES_TO_EVALUATE):
+            for gen in range(len(best_fitnesses_all[i])):
+                f.write(f"{i},{gen},{best_fitnesses_all[i][gen]},{avg_fitnesses_all[i][gen]}\n")
+
+
+    if NUM_RESUMES_TO_EVALUATE > 1:
+        print("\n=== Evolution History Across Resumes ===")
+        
+        # 1. Pre-calculate averages for all generations to enable normalization
+        gen_stats = []
+        num_generations = len(best_fitnesses_all[0])
+        
+        for gen in range(num_generations):
+            gen_best_fits = [best_fitnesses_all[i][gen] for i in range(NUM_RESUMES_TO_EVALUATE)]
+            gen_avg_fits = [avg_fitnesses_all[i][gen] for i in range(NUM_RESUMES_TO_EVALUATE)]
+            
+            avg_best = sum(gen_best_fits) / NUM_RESUMES_TO_EVALUATE
+            avg_avg = sum(gen_avg_fits) / NUM_RESUMES_TO_EVALUATE
+            
+            gen_stats.append({
+                'avg_best': avg_best,
+                'avg_avg': avg_avg
+            })
+
+        # 2. Determine Global Min/Max for normalization logic
+        all_best_values = [stat['avg_best'] for stat in gen_stats]
+        global_min = min(all_best_values)
+        global_max = max(all_best_values)
+        # Avoid division by zero if flatline
+        denom = (global_max - global_min) if global_max != global_min else 1.0 
+        
+        base_fitness = gen_stats[0]['avg_best']
+        prev_fitness = base_fitness
+
+        # 3. Print Table Header
+        print(f"{'ITERATION':<10} | {'AVG BEST':<10} | {'AVG AVG':<10} | {'DELTA':<10} | {'vs BASE':<10} | {'NORM BEST':<10}")
+        print("-" * 75)
+
+        # 4. Calculate Metrics and Print Rows
+        for gen, stats in enumerate(gen_stats):
+            curr_best = stats['avg_best']
+            curr_avg = stats['avg_avg']
+            
+            # Metrics
+            delta = curr_best - prev_fitness
+            imp_over_base = curr_best - base_fitness
+            minmax_norm = (curr_best - global_min) / denom
+            
+            print(f"{gen:<10} | {curr_best:<10.4f} | {curr_avg:<10.4f} | {delta:<10.4f} | {imp_over_base:<10.4f} | {minmax_norm:<10.4f}")
+            
+            # Update previous for next iteration
+            prev_fitness = curr_best
