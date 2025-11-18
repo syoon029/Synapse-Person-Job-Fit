@@ -4,7 +4,7 @@ import pandas as pd
 import faiss
 from infrastructure.database import Posting, Resume
 from embeddings.embed import embed_posting, embed_resume_text, _safe_join
-from embeddings.embed_stage2 import embed_text, doc_sim_score, ContrastiveLearningModel, load_model
+from embeddings.embed_stage2 import embed_text, doc_sim_score, doc_sim_score_with_cl, ContrastiveLearningModel, load_model
 from transformers import RobertaModel
 from typing import List, Dict, Any
 from scipy.stats import rankdata

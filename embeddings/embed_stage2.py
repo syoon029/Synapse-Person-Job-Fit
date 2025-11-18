@@ -25,7 +25,7 @@ MAX_SEQ_LEN = 510 # maximum length of a sequence that BERT can operate on (510 t
 POSTING_TXT_COL = 'description'
 RESUME_TXT_COL = 'Resume_str'
 
-tokenizer = RobertaTokenizer.from_pretrained(_EMBED_TOKENIZER)
+TOKENIZER = RobertaTokenizer.from_pretrained(_EMBED_TOKENIZER)
 
 def _clean_text(text: str) -> str:
     '''
@@ -60,12 +60,12 @@ def word_movers_distance(emb1: np.ndarray, emb2: np.ndarray) -> float:
 
 def preprocess_posting(x):
     '''preprocess for a job listing, as read from the linkedin CSV file'''
-    return tokenizer(x[POSTING_TXT_COL], add_special_tokens=False)
+    return TOKENIZER(x[POSTING_TXT_COL], add_special_tokens=False)
 
 
 def preprocess_resume(x):
     '''preprocess for a resume CSV file'''
-    return tokenizer(x[RESUME_TXT_COL], add_special_tokens=False)
+    return TOKENIZER(x[RESUME_TXT_COL], add_special_tokens=False)
 
 
 def group_texts(token_data, return_tensors=None):
@@ -93,8 +93,8 @@ def group_texts(token_data, return_tensors=None):
             shifts = [0]
         for shift in shifts:
             # Re-encode the token list with the special eos/bos characters
-            enc_token_list = tokenizer(
-                tokenizer.decode(token_list[shift : shift+MAX_SEQ_LEN]), 
+            enc_token_list = TOKENIZER(
+                TOKENIZER.decode(token_list[shift : shift+MAX_SEQ_LEN]), 
                 max_length=MAX_SEQ_LEN+2,
                 padding='max_length',
                 padding_side='right',
@@ -192,9 +192,9 @@ def embed_text(text: str, word_reduction_type: str='sum_last_four') -> np.ndarra
     Returns embeddings as torch.Tensor: Size (num_tokens x 768); one vector for each word.
     '''
     text = _clean_text(text)
-    tokenizer = AutoTokenizer.from_pretrained(_EMBED_TOKENIZER)
+#     tokenizer = AutoTokenizer.from_pretrained(_EMBED_TOKENIZER)
     # Tokenize with truncation to the model's max length
-    tokenized = tokenizer(text, truncation=True, max_length=512, return_tensors='pt')
+    tokenized = TOKENIZER(text, truncation=True, max_length=512, return_tensors='pt')
 
     model = AutoModel.from_pretrained(_EMBED_MODEL, add_pooling_layer=False, output_hidden_states=True)
     model.eval()
@@ -230,15 +230,14 @@ def doc_sim_score_with_cl(model, txt1, txt2, device):
     device: String or torch.device. The device to use for computations.
     '''
     txt1, txt2 = _clean_text(txt1), _clean_text(txt2)
-    tokenizer = AutoTokenizer.from_pretrained(_EMBED_TOKENIZER)
     
-    tokenized1 = tokenizer(txt1, truncation=True, padding='max_length', max_length=512, return_tensors='pt')
-    tokenized2 = tokenizer(txt2, truncation=True, padding='max_length', max_length=512, return_tensors='pt')
+    tokenized1 = TOKENIZER(txt1, truncation=True, padding='max_length', max_length=512, return_tensors='pt')
+    tokenized2 = TOKENIZER(txt2, truncation=True, padding='max_length', max_length=512, return_tensors='pt')
     
     model.eval()
     with torch.no_grad():
-        emb1 = model.get_embedding({k: v.to(device) for k,v in tokenized1.items()})
-        emb2 = model.get_embedding({k: v.to(device) for k,v in tokenized2.items()})
+        emb1 = model(tokenized1.to(device))
+        emb2 = model(tokenized2.to(device))
     
     
     return torch.linalg.norm(emb1-emb2, ord=2).cpu().item()
