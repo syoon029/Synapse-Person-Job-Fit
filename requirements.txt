@@ -7,12 +7,13 @@ langchain
 pandas
 scikit-learn
 openai==1.76.0
-numpy==2.3.4
+numpy==2.2.6
 google-genai
 # In case we decide to make a webapp
 fastapi==0.103.0
 uvicorn==0.23.2
 sentence-transformers==3.0.1
-transformers
+transformers==4.48.0
+datasets==3.6.0
 streamlit==1.51.0
 PyPDF2==3.0.1

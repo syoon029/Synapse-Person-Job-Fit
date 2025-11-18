@@ -4,7 +4,8 @@ import pandas as pd
 import faiss
 from infrastructure.database import Posting, Resume
 from embeddings.embed import embed_posting, embed_resume_text, _safe_join
-from embeddings.embed_stage2 import embed_text, doc_sim_score
+from embeddings.embed_stage2 import embed_text, doc_sim_score, ContrastiveLearningModel, load_model
+from transformers import RobertaModel
 from typing import List, Dict, Any
 from scipy.stats import rankdata
 
@@ -200,7 +201,12 @@ if __name__ == "__main__":
             posting.description, posting.formatted_experience_level, posting.location
         ]))
         
-        score = doc_sim_score(phase2_resume_embedding, posting_embedding)
+        bert_model = RobertaModel.from_pretrained('./roberta-tuned', add_pooling_layer=False, output_hidden_states=True)
+        cl_model = ContrastiveLearningModel(bert_model).to('cuda:0')
+        cl_model = load_model(cl_model, './contrastive_learning.pth')
+        # Use negative distance since lower score implies higher similarity
+        score = -doc_sim_score_with_cl(cl_model, ansel_resume.text, posting.description, 'cuda:0')
+#         score = doc_sim_score(phase2_resume_embedding, posting_embedding)
         scored_postings.append((score, posting))
         phase2_scores_all.append(score)
 
