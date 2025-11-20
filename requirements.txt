@@ -8,6 +8,7 @@ pandas
 scikit-learn
 openai==1.76.0
 numpy==2.2.6
+POT
 google-genai
 # In case we decide to make a webapp
 fastapi==0.103.0

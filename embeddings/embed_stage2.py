@@ -4,6 +4,7 @@ import time
 import numpy as np
 import pandas as pd
 import torch
+import ot
 
 from torch import nn
 from torch.utils.data import DataLoader, Dataset
@@ -15,15 +16,15 @@ from transformers import AutoTokenizer, AutoModel, RobertaTokenizer, RobertaMode
 from datasets import Dataset as HFDataset, DatasetDict, load_dataset, concatenate_datasets
 from datasets.dataset_dict import DatasetDict
 
-from infrastructure.database import Posting, Resume
+from database import Posting, Resume
 
 _EMBED_TOKENIZER = 'roberta-base'
 _EMBED_MODEL = './roberta-tuned'
 
 BLOCK_SIZE = 128 # Stride length when splitting long texts into 512-length segments
 MAX_SEQ_LEN = 510 # maximum length of a sequence that BERT can operate on (510 tokens + the start and end tokens)
-POSTING_TXT_COL = 'description'
-RESUME_TXT_COL = 'Resume_str'
+POSTING_TXT_COL = 'description' # Name of the column in the postings CSV that contains the raw text
+RESUME_TXT_COL = 'Resume_str' # Name of the column in the resume CSV that contains the raw text
 
 TOKENIZER = RobertaTokenizer.from_pretrained(_EMBED_TOKENIZER)
 
@@ -40,7 +41,9 @@ def _clean_text(text: str) -> str:
     
 
 def cosine_similarity(arr1: np.ndarray, arr2: np.ndarray) -> float:
-    '''arr1 and arr2 should be 1D vectors'''
+    '''
+    Return the cosine similarity between two vectors (should each be 1D)
+    '''
     return (np.dot(arr1, arr2) / (np.linalg.norm(arr1) * np.linalg.norm(arr2)))
 
 
@@ -58,14 +61,14 @@ def word_movers_distance(emb1: np.ndarray, emb2: np.ndarray) -> float:
     return distance
 
 
-def preprocess_posting(x):
-    '''preprocess for a job listing, as read from the linkedin CSV file'''
-    return TOKENIZER(x[POSTING_TXT_COL], add_special_tokens=False)
+def preprocess_posting(x: str) -> BatchEncoding:
+    '''preprocess for a job listing, as read from the linkedin job posting CSV file'''
+    return tokenizer(x[POSTING_TXT_COL], add_special_tokens=False)
 
 
-def preprocess_resume(x):
-    '''preprocess for a resume CSV file'''
-    return TOKENIZER(x[RESUME_TXT_COL], add_special_tokens=False)
+def preprocess_resume(x: str) -> BatchEncoding:
+    '''preprocess for a resume CSV file, as read from the resume CSV file'''
+    return tokenizer(x[RESUME_TXT_COL], add_special_tokens=False)
 
 
 def group_texts(token_data, return_tensors=None):
@@ -85,7 +88,6 @@ def group_texts(token_data, return_tensors=None):
     for data_tuple in zip(*all_data):
         # Data tuple consists of one list for each key in the data (should just be 'input_ids' and 'attention_mask' of equal length)         
         # Not a general assumption that this is what is inside data_tuple
-#         print(data_tuple)
         token_list, attn_mask = data_tuple
         n_tokens = len(token_list)
         shifts = [t for t in range(0, n_tokens, BLOCK_SIZE) if t+MAX_SEQ_LEN+2-n_tokens < BLOCK_SIZE]
@@ -142,7 +144,6 @@ def prepare_token_dataset(tokenizer, posting_path: str=None, resume_path: str=No
         batched=True,
         num_proc=12,
         remove_columns=posting_dataset['train'].column_names,
-#         fn_kwargs={'tokenizer': tokenizer}
     )
 
     tokenized_resume_dataset = resume_dataset.map(
@@ -150,7 +151,6 @@ def prepare_token_dataset(tokenizer, posting_path: str=None, resume_path: str=No
         batched=True,
         num_proc=12,
         remove_columns=resume_dataset['train'].column_names,
-#         fn_kwargs={'tokenizer': tokenizer}
     )
     tokenized_dataset = concatenate_datasets([tokenized_posting_dataset['train'], tokenized_resume_dataset['train']])
     tokenized_dataset = tokenized_dataset.train_test_split(test_size=test_size)
@@ -200,7 +200,6 @@ def embed_text(text: str, word_reduction_type: str='sum_last_four') -> np.ndarra
     model.eval()
 
     with torch.no_grad():
-#         print(tokenizer.convert_ids_to_tokens(tokenized['input_ids'].flatten()))
         outputs = model(**tokenized)
         # outputs.hidden_states is a tuple: one tensor per layer (batch, seq_len, hidden)
         hidden_states = outputs.hidden_states
@@ -230,9 +229,10 @@ def doc_sim_score_with_cl(model, txt1, txt2, device):
     device: String or torch.device. The device to use for computations.
     '''
     txt1, txt2 = _clean_text(txt1), _clean_text(txt2)
+#     tokenizer = AutoTokenizer.from_pretrained(_EMBED_TOKENIZER)
     
-    tokenized1 = TOKENIZER(txt1, truncation=True, padding='max_length', max_length=512, return_tensors='pt')
-    tokenized2 = TOKENIZER(txt2, truncation=True, padding='max_length', max_length=512, return_tensors='pt')
+    tokenized1 = TOKENIZER(txt1, truncation=True, padding='max_length', max_length=MAX_SEQ_LEN+2, return_tensors='pt')
+    tokenized2 = TOKENIZER(txt2, truncation=True, padding='max_length', max_length=MAX_SEQ_LEN+2, return_tensors='pt')
     
     model.eval()
     with torch.no_grad():
@@ -301,12 +301,16 @@ class ContrastiveLearningDataset(Dataset):
         
         
     @staticmethod
-    def augment_txt_parallel(data, tokenizer, augmentation_fns):
+    def augment_txt_parallel(args):
         '''under development (parallelizing the augmentation process)'''
-        fn = np.random.choice(augmentation_fns)
-        raw_txt = tokenizer.decode(data['input_ids'], skip_special_tokens=True)
+#         fn = np.random.choice(augmentation_fns)
+#         raw_txt = TOKENIZER.decode(input_ids, skip_special_tokens=True)
+        raw_txt, fn = args
+#         print('check3')
         aug_txt = fn(raw_txt)
-        aug_data = tokenizer(aug_txt, padding='max_length', padding_side='right', truncation=True, max_length=MAX_SEQ_LEN+2)
+#         aug_txt_list = [fn(raw_txt) for raw_txt in raw_txt_list]
+#         print('check4')
+        aug_data = TOKENIZER(aug_txt, padding='max_length', padding_side='right', truncation=True, max_length=MAX_SEQ_LEN+2, return_tensors='pt')
         return aug_data
     
     @staticmethod
@@ -353,31 +357,38 @@ class ContrastiveLearningDataset(Dataset):
         
         return: None
         '''
-#         with Manager() as manager:
-#             shared_dict = manager.dict()
-#             shared_dict['dataset'] = self.lm_dataset
-#             shared_dict['augment_txt_fn'] = ContrastiveLearningDataset.augment_txt_parallel
-#             shared_dict['tokenizer'] = self.tokenizer
-#             shared_dict['augmentation_fns'] = self.augmentation_fns
-            
-#             with Pool(12) as pool:
-# #                 args = list(zip(range(len(self)), [self] * len(self)))
-#                 args = [(i, shared_dict) for i in range(len(self))]
-#                 print('Beginning')
-#                 res = list(tqdm(pool.imap(ContrastiveLearningDataset.build_dataset_parallel, args), total=len(self)))
-#                 self.cur_data = res
         self.cur_data = []
-        for i in tqdm(list(range(len(self)))):
-            # i is the index of the "anchor"
-            data = self.lm_dataset[i]
-            pos = self.augment_txt(data)
-            neg = self.lm_dataset[np.random.randint(0, self.dataset_len)]
+        chunk_size = 500
+        with Pool() as pool:
+            for i in tqdm(list(range(0, self.dataset_len, chunk_size))):
+                data = self.lm_dataset[i : i+chunk_size]
+                raw_txt_list = TOKENIZER.batch_decode(data['input_ids'], skip_special_tokens=True)
+
+                args = [(txt, np.random.choice(self.augmentation_fns)) for txt in raw_txt_list]
+                pos = list(pool.map(ContrastiveLearningDataset.augment_txt_parallel, args, chunksize=10))
+                neg = self.lm_dataset[np.random.randint(0, self.dataset_len, size=min(chunk_size, self.dataset_len-i))]
+                
+                self.cur_data.extend([
+                    BatchEncoding({
+                        'input_ids': torch.stack([data['input_ids'][j], pos[j]['input_ids'].squeeze(), neg['input_ids'][j]]),
+                        'attention_mask': torch.stack([data['attention_mask'][j], pos[j]['attention_mask'].squeeze(), neg['attention_mask'][j]]),
+
+                    })
+                    for j in range(len(raw_txt_list))
+                ]) 
+                
+#         self.cur_data = []
+#         for i in tqdm(list(range(len(self)))):
+#             # i is the index of the "anchor"
+#             data = self.lm_dataset[i]
+#             pos = self.augment_txt(data)
+#             neg = self.lm_dataset[np.random.randint(0, self.dataset_len)]
             
-            # (anchor, positive sample, negative sample)
-            self.cur_data.append(BatchEncoding({
-                'input_ids': torch.stack([data['input_ids'].squeeze(), pos['input_ids'].squeeze(), neg['input_ids'].squeeze()]),
-                'attention_mask': torch.stack([data['attention_mask'].squeeze(), pos['attention_mask'].squeeze(), neg['attention_mask'].squeeze()])
-            }))
+#             # (anchor, positive sample, negative sample)
+#             self.cur_data.append(BatchEncoding({
+#                 'input_ids': torch.stack([data['input_ids'].squeeze(), pos['input_ids'].squeeze(), neg['input_ids'].squeeze()]),
+#                 'attention_mask': torch.stack([data['attention_mask'].squeeze(), pos['attention_mask'].squeeze(), neg['attention_mask'].squeeze()])
+#             }))
             
             
     def __len__(self):
@@ -392,7 +403,10 @@ class ContrastiveLearningDataset(Dataset):
 class ContrastiveLearningModel(nn.Module):
     def __init__(self, bert_model, out_embed_dim=512):
         '''
-        Model to be trained with constrastive learning with triplet loss.
+        Model to be trained with constrastive learning with triplet loss. The model learns by first creating augmented views of a document, 
+        such as rearranging sentences, dropping sentences, randomly masking tokens, etc. It then trains minimize the distance between a
+        document (anchor) and any augmented view of it (positive sample), while maximizing the distance between the document and some other 
+        randomly selected document (negative sample).
         
         bert_model: The pretrained BERT or BERT-based model that serves as pretrained embeddings. Will be frozen during training.
         out_embed_dim: Dimension of the output embeddings per token.
@@ -472,17 +486,17 @@ def train_model(model, optimizer, dataset, loss_fn, epochs, batch_size, save_fre
                 t = time.time()
                 print(f'Batch {i+1}/{len(loader)}, loss: {np.mean(losses)} ({elapsed:.3f}s)')
                 losses = []
-                
-        # Rebuild the dataset; i.e. re-sample the anchor augmentations and negative samples
-        dataset.build_dataset()
-        loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
         
         if scheduler is not None:
             scheduler.step()
             
         if save_freq and save_path and ((e+1) % save_freq == 0 or e == epochs-1):
             save_model(save_path, model, optimizer, epochs)
-            print(f'Saved to {save_path}')       
+            print(f'Saved to {save_path}')   
+            
+        # Rebuild the dataset; i.e. re-sample the anchor augmentations and negative samples
+        dataset.build_dataset()
+        loader = DataLoader(dataset, batch_size=batch_size, shuffle=True)
             
             
 def save_model(save_path, model, optimizer, epoch):

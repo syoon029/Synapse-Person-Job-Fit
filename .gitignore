@@ -11,6 +11,13 @@ __pycache__/
 # ignore iPython checkpoints
 .ipynb_checkpoints/
 
+# Ignore BERT and pytorch models
+roberta-tuned/
+roberta-tuned-v1/
+
+# Keenan's scratch folder
+temp/
+
 postings.db
 resumes.db
 index.faiss
