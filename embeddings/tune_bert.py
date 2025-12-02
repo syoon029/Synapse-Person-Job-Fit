@@ -15,7 +15,6 @@ MAX_SEQ_LEN = 512 # maximum length of a sequence that BERT can operate on
 
 
 
-
 if __name__ == '__main__':
     posting_csv_path = './temp/postings5k.csv'
     resume_csv_path = './resume_data/Resume.csv'
