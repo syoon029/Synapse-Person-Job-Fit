@@ -4,7 +4,7 @@ import pandas as pd
 import faiss
 from infrastructure.database import Posting, Resume
 from embeddings.embed import embed_posting, embed_resume_text, _safe_join
-from embeddings.embed_stage2 import embed_text, doc_sim_score, doc_sim_score_with_cl, ContrastiveLearningModel, load_model
+from embeddings.embed_stage2 import doc_sim_score
 from transformers import RobertaModel
 from typing import List, Dict, Any
 from scipy.stats import rankdata
@@ -194,19 +194,16 @@ if __name__ == "__main__":
     scored_postings = []
     phase2_scores_all = []
     
-    phase2_resume_embedding = embed_text(ansel_resume.text)
+#     phase2_resume_embedding = embed_text(ansel_resume.text)
     for i, posting in enumerate(ansel_postings):
-        posting_embedding = embed_text(_safe_join([
-            posting.title, posting.company_name, posting.skills_desc,
-            posting.description, posting.formatted_experience_level, posting.location
-        ]))
+#         posting_embedding = embed_text(_safe_join([
+#             posting.title, posting.company_name, posting.skills_desc,
+#             posting.description, posting.formatted_experience_level, posting.location
+#         ]))
         
-        bert_model = RobertaModel.from_pretrained('./roberta-tuned', add_pooling_layer=False, output_hidden_states=True)
-        cl_model = ContrastiveLearningModel(bert_model).to('cuda:0')
-        cl_model = load_model(cl_model, './contrastive_learning.pth')
-        # Use negative distance since lower score implies higher similarity
-        score = -doc_sim_score_with_cl(cl_model, ansel_resume.text, posting.description, 'cuda:0')
-#         score = doc_sim_score(phase2_resume_embedding, posting_embedding)
+        # Use inverse distance since lower score implies higher similarity
+        score = 1 / doc_sim_score(ansel_resume.text, posting.description, device='cuda:0', dist_func='soft_align')
+
         scored_postings.append((score, posting))
         phase2_scores_all.append(score)
 
