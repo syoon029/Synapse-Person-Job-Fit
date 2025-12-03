@@ -40,6 +40,11 @@ Synapse aims to make job search and resume tuning **data-driven, interpretable**
 ![System Architecture](assets/diagram.jpg)
 
 
+
+
+## Flow and Component Diagram
+![System Architecture](assets/flow.jpg)
+
 ## Our Data Infrastructure
 
 ### Job Postings
@@ -188,6 +193,11 @@ We provide a notebook demonstrating how to load the dataset, query the FAISS ind
 
 **Download the dataset:**  
 https://www.kaggle.com/datasets/anselerol/job-postings-and-resumes-with-embeddings-faiss/
+
+
+## Directory Structure
+
+
 
 ## Future Work
 
