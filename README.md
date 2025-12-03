@@ -91,6 +91,8 @@ python evaluation.py
 python visualize_evolution.py
 ```
 
+![System Architecture](assets/eval.jpg)
+
 ### 6.Run Resume Optimization
 ```
 python resume_optimization.py
