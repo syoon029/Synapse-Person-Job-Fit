@@ -178,6 +178,17 @@ Main feature:
 - Higher score = stronger semantic similarity  
 - Used by Phase II and by ensemble scoring logic
 
+
+## We Open Source Our Data and Index​
+
+We open-source our full dataset — including **pre-embedded job postings**, **resume embeddings**, and a **ready-to-use FAISS index** — so users can run semantic search immediately without rebuilding embeddings.
+
+**Starter notebook:**  
+We provide a notebook demonstrating how to load the dataset, query the FAISS index, and run both Phase I and Phase II of the system.
+
+**Download the dataset:**  
+https://www.kaggle.com/datasets/anselerol/job-postings-and-resumes-with-embeddings-faiss/
+
 ## Future Work
 
 ### Additional Evaluation
