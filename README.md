@@ -198,25 +198,66 @@ https://www.kaggle.com/datasets/anselerol/job-postings-and-resumes-with-embeddin
 ## Directory Structure
 ```
 SYNAPSE-PERSON-JOB-FIT/
-│
-├── embeddings/                 # SBERT embeddings + FAISS builder
-├── linkedin_data/              # Raw LinkedIn postings
-├── resume_data/                # Raw resume dataset
-├── infrastructure/             # DB + util scripts
-├── evaluations/                # Benchmarks + experiments
-│
-├── recommender.py              # Main recommendation engine
-├── resume_optimization.py      # LLM-guided resume evolution
-├── explainability_rag.py       # RAG explanation module
-├── llm_scorer.py               # LLM-based scoring for Phase II
-├── infill_commands.py          # Prompt templates
-├── streamlit_ui.py             # Web UI
-│
-├── postings.db                 # SQLite DB for postings
-├── index.faiss                 # FAISS index
-│
+├── README.md
+├── __init__.py
+├── assets
+│   ├── diagram.jpg
+│   ├── eval.jpg
+│   └── flow.jpg
+├── contrastive_learning.ipynb
+├── embed_stage2.ipynb
+├── embeddings
+│   ├── __init__.py
+│   ├── contrastive_learning.py
+│   ├── embed.py
+│   ├── embed_stage2.py
+│   └── tune_bert.py
+├── evaluations
+│   ├── __init__.py
+│   ├── anselbench.py
+│   ├── eval_ground_truth_emb.py
+│   ├── evaluation.py
+│   └── visualize_evolution.py
+├── explainability_rag.py
+├── index.faiss
+├── infill_commands.py
+├── infrastructure
+│   ├── __init__.py
+│   ├── database.py
+│   ├── index.py
+│   ├── llm_logging.py
+│   ├── llm_starter_code.py
+│   └── select_subset.py
+├── linkedin_data
+│   ├── ansel_postings.csv
+│   ├── companies
+│   │   ├── companies.csv
+│   │   ├── company_industries.csv
+│   │   ├── company_specialities.csv
+│   │   └── employee_counts.csv
+│   ├── jobs
+│   │   ├── benefits.csv
+│   │   ├── job_industries.csv
+│   │   ├── job_skills.csv
+│   │   └── salaries.csv
+│   ├── mappings
+│   │   ├── industries.csv
+│   │   └── skills.csv
+│   ├── postings.csv
+│   ├── sample_postings.csv
+│   └── scraper_ui.html
+├── llm_scorer.py
+├── postings.db
+├── recommender.py
 ├── requirements.txt
-└── README.md
+├── resume_data
+│   ├── Resume.csv
+│   ├── ansel_resume.csv
+│   └── sample_resumes.csv
+├── resume_optimization.py
+├── streamlit_ui.py
+├── tune_bert.ipynb
+└── tune_bert_test.ipynb
 
 ```
 ## Future Work
