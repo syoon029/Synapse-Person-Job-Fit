@@ -36,6 +36,24 @@ Build a system that is:
 Synapse aims to make job search and resume tuning **data-driven, interpretable**.
 
 
+## Synapse Architecture​
+![System Architecture](assets/diagram.jpg)
+
+## How do we embed data
+### Recommender Phase I (/embeddings/embed.py)
+- We use SBERT (all-MiniLM-L6-v2). Outputs dense vectors.​
+- Job fused text: title + company + skills_desc + description (+ level, location)​
+- Resume text: full resume (headline + recent experiences + skills)​
+
+### Recommender Phase II​ (/embeddings/embed_stage2.py)
+
+**Input:**  
+- Postings retrieved from Phase I  
+- User resume  
+
+**Output:**  
+- A re-ranked list of the Phase I job postings with improved semantic relevance  
+
 ## How to start/run our project
 ### 1.Clone the Repository
 
@@ -60,16 +78,62 @@ GEMINI_API_BASE_URL=your_proxy_url
 To get started, run 
 ```python infill_commands.py``` to load the postings into the sqllite database and setup faiss.
 
-### 5.Run Resume Optimization
+### 5.Evaluations
+```
+cd evaluations
+```
+
+```
+python evaluation.py
+```
+
+```
+python visualize_evolution.py
+```
+
+### 6.Run Resume Optimization
 ```
 python resume_optimization.py
 ```
 
 This will: Generate mutated resumes, Rank them using Phase 1/Phase 2, Produce the highest-fitness version
-### 6.Launch the Streamlit Web UI
+### 7.Launch the Streamlit Web UI
 ```
 streamlit run streamlit_ui.py
 ```
+
+
+## Beyond our Demo
+
+###  `tune_bert.py`
+Fine-tunes a **RoBERTa model** on our postings/resume dataset.
+
+- Goal: Improve embedding quality by adapting RoBERTa to our domain  
+- Outcome:  
+  Finetuning had **minimal effect** on benchmark accuracy compared to using the pretrained HuggingFace model.  
+  Because Phase I already retrieves highly relevant postings, gains in Phase II were limited.
+
+###  `contrastive_learning.py`
+Implements a full **contrastive learning (CL)** pipeline for job–resume semantic similarity.
+
+Included components:
+- Text preprocessing utilities  
+- Dataset classes for resumes & postings  
+- Model classes for CL training  
+- Training loop & augmentation strategies  
+- Multiple similarity scoring functions  
+
+The similarity function currently used in the system is:  
+**`soft_alignment_similarity`**  
+
+### `embed_stage2.py`
+Implements the second-stage embedding and similarity scoring logic.
+
+Main feature:
+- **`doc_sim_score(posting, resume)`**  
+  Queries a trained CL model and computes a similarity score  
+- Higher score = stronger semantic similarity  
+- Used by Phase II and by ensemble scoring logic
 
 ## Future Work
 
