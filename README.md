@@ -197,6 +197,26 @@ https://www.kaggle.com/datasets/anselerol/job-postings-and-resumes-with-embeddin
 
 ## Directory Structure
 
+SYNAPSE-PERSON-JOB-FIT/
+│
+├── embeddings/                 # SBERT embeddings + FAISS builder
+├── linkedin_data/              # Raw LinkedIn postings
+├── resume_data/                # Raw resume dataset
+├── infrastructure/             # DB + util scripts
+├── evaluations/                # Benchmarks + experiments
+│
+├── recommender.py              # Main recommendation engine
+├── resume_optimization.py      # LLM-guided resume evolution
+├── explainability_rag.py       # RAG explanation module
+├── llm_scorer.py               # LLM-based scoring for Phase II
+├── infill_commands.py          # Prompt templates
+├── streamlit_ui.py             # Web UI
+│
+├── postings.db                 # SQLite DB for postings
+├── index.faiss                 # FAISS ANN index
+│
+├── requirements.txt
+└── README.md
 
 
 ## Future Work
