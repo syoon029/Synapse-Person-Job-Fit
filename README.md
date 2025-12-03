@@ -39,6 +39,47 @@ Synapse aims to make job search and resume tuning **data-driven, interpretable**
 ## Synapse Architecture​
 ![System Architecture](assets/diagram.jpg)
 
+
+## Our Data Infrastructure
+
+### Job Postings
+We use a large-scale dataset of LinkedIn job postings:
+
+- **Source:** LinkedIn job postings from **2023–2024**
+- **Available on Kaggle:**  
+  https://www.kaggle.com/datasets/arshkon/linkedin-job-postings/data
+- **Size:** ~120,000 postings  
+- **Fields include:**  
+  - Company name  
+  - Industry  
+  - Job title  
+  - Description  
+  - Location  
+  - Pay range  
+
+---
+
+### Resumes
+Our system also uses a dataset of collected resumes:
+
+- **Source:** Scraped from LiveCareer  
+- **Available on Kaggle:**  
+  https://www.kaggle.com/datasets/snehaanbhawal/resume-dataset/data
+- **Size:** ~2,500 resumes  
+- **Formats:** string + HTML  
+- **Coverage:** multiple experience levels and job sectors  
+
+---
+
+### Relational Database (SQLite)
+All postings and resumes are stored in a **SQLite relational database** for fast access.
+
+- Total data volume: **~2 GB**  
+- Designed for quick point queries (e.g., `job_id`)  
+- Embeddings for postings are also stored inside this database for efficient retrieval  
+
+
+
 ## How do we embed data
 ### Recommender Phase I (embeddings/embed.py)
 - We use SBERT (all-MiniLM-L6-v2). Outputs dense vectors.​
