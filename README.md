@@ -196,7 +196,7 @@ https://www.kaggle.com/datasets/anselerol/job-postings-and-resumes-with-embeddin
 
 
 ## Directory Structure
-
+```
 SYNAPSE-PERSON-JOB-FIT/
 │
 ├── embeddings/                 # SBERT embeddings + FAISS builder
@@ -213,12 +213,12 @@ SYNAPSE-PERSON-JOB-FIT/
 ├── streamlit_ui.py             # Web UI
 │
 ├── postings.db                 # SQLite DB for postings
-├── index.faiss                 # FAISS ANN index
+├── index.faiss                 # FAISS index
 │
 ├── requirements.txt
 └── README.md
 
-
+```
 ## Future Work
 
 ### Additional Evaluation
