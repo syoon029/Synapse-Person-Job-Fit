@@ -40,12 +40,12 @@ Synapse aims to make job search and resume tuning **data-driven, interpretable**
 ![System Architecture](assets/diagram.jpg)
 
 ## How do we embed data
-### Recommender Phase I (/embeddings/embed.py)
+### Recommender Phase I (embeddings/embed.py)
 - We use SBERT (all-MiniLM-L6-v2). Outputs dense vectors.​
 - Job fused text: title + company + skills_desc + description (+ level, location)​
 - Resume text: full resume (headline + recent experiences + skills)​
 
-### Recommender Phase II​ (/embeddings/embed_stage2.py)
+### Recommender Phase II​ (embeddings/embed_stage2.py)
 
 **Input:**  
 - Postings retrieved from Phase I  
