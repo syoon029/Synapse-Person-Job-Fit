@@ -2,7 +2,6 @@ import time
 import numpy as np
 import pandas as pd
 import torch
-import ot
 
 from torch import nn
 from torch.nn import functional as F
@@ -72,7 +71,7 @@ def fetch_all_resumes_text(database_url: str) -> list[str]:
         return list(session.scalars(stmt))
     
     
-def doc_sim_score(txt1, txt2, device='cpu', dist_func='soft_align'):
+def doc_sim_score(txt1, txt2, dist_func='soft_align'):
     '''
     Get the document similarity score with a model trained with contrastive learning. Depending on the similarity metric chosen, a higher value
     can imply higher or lower similarity.
@@ -89,8 +88,8 @@ def doc_sim_score(txt1, txt2, device='cpu', dist_func='soft_align'):
 
     MODEL.eval()
     with torch.no_grad():
-        emb1 = MODEL(tokenized1.to(device))
-        emb2 = MODEL(tokenized2.to(device))
+        emb1 = MODEL(tokenized1.to(DEVICE))
+        emb2 = MODEL(tokenized2.to(DEVICE))
     
     if dist_func == 'soft_align':
         emb1 = F.normalize(emb1, dim=2)

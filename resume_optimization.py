@@ -202,19 +202,19 @@ def calculate_fitness_phase2(resume_text: str, postings: list) -> float:
     if num_postings == 0:
         return 0.0
 
-    resume_embedding = embed_text(resume_text)
+#     resume_embedding = embed_text(resume_text)
     
     for posting in postings:
-        posting_embedding = embed_text(_safe_join([
-            posting.title,
-            posting.company_name,
-            posting.skills_desc,
-            posting.description,
-            posting.formatted_experience_level,
-            posting.location
-        ]))
+#         posting_embedding = embed_text(_safe_join([
+#             posting.title,
+#             posting.company_name,
+#             posting.skills_desc,
+#             posting.description,
+#             posting.formatted_experience_level,
+#             posting.location
+#         ]))
         
-        similarity = doc_sim_score(resume_embedding, posting_embedding)
+        similarity = doc_sim_score(resume_text, posting.description)
         total_score += similarity
     
     return total_score / num_postings
@@ -244,19 +244,19 @@ def calculate_fitness_advanced(resume_text: str, postings: list) -> float:
     
     # --- 2. Calculate Phase 2 scores (doc_sim_score) ---
     phase2_scores = np.zeros(num_postings)
-    resume_embedding_p2 = embed_text(resume_text)
+#     resume_embedding_p2 = embed_text(resume_text)
     
     for i, posting in enumerate(postings):
-        posting_embedding = embed_text(_safe_join([
-            posting.title,
-            posting.company_name,
-            posting.skills_desc,
-            posting.description,
-            posting.formatted_experience_level,
-            posting.location
-        ]))
+#         posting_embedding = embed_text(_safe_join([
+#             posting.title,
+#             posting.company_name,
+#             posting.skills_desc,
+#             posting.description,
+#             posting.formatted_experience_level,
+#             posting.location
+#         ]))
         
-        similarity = doc_sim_score(resume_embedding_p2, posting_embedding)
+        similarity = doc_sim_score(resume_text, posting.description)
         phase2_scores[i] = similarity
     
     # --- 3. Calculate LLM pairwise ranking scores ---

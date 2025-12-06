@@ -1,17 +1,19 @@
 import os
 import json
 import numpy as np
+import torch
 from typing import Iterable, List, Optional
 from sentence_transformers import SentenceTransformer
 
 _EMBED_MODEL = "sentence-transformers/all-MiniLM-L6-v2"
+DEVICE = ('cuda:0' if torch.cuda.is_available() else 'cpu')
 
 _model: Optional[SentenceTransformer] = None
 
 def _get_model() -> SentenceTransformer:
     global _model
     if _model is None:
-        _model = SentenceTransformer(_EMBED_MODEL)
+        _model = SentenceTransformer(_EMBED_MODEL).to(DEVICE)
     return _model
 
 def _safe_join(parts: Iterable[str]) -> str:

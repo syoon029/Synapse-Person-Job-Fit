@@ -1,5 +1,5 @@
 from embeddings.embed import embed_resume_text, _safe_join
-from embeddings.embed_stage2 import embed_text, doc_sim_score
+from embeddings.embed_stage2 import doc_sim_score
 from infrastructure.index import search_faiss
 from infrastructure.database import get_postings_by_ids, get_all_resumes, save_resume_candidates, update_phase2_scores,  update_phase2_advanced_scores, update_llm_scores
 from llm_scorer import load_cache, pairwise_rank_to_scores
@@ -105,18 +105,18 @@ def phase1_recommend(resume):
 def phase2_recommend(resume, candidate_ids):
     postings = get_postings_by_ids(candidate_ids)
     scored_postings = []
-    resume_embedding = embed_text(resume.text)
+#     resume_embedding = embed_text(resume.text)
     for posting in postings:
-        posting_embedding = embed_text(_safe_join([
-            posting.title,
-            posting.company_name,
-            posting.skills_desc,
-            posting.description,
-            posting.formatted_experience_level,
-            posting.location
-        ]))
+#         posting_embedding = embed_text(_safe_join([
+#             posting.title,
+#             posting.company_name,
+#             posting.skills_desc,
+#             posting.description,
+#             posting.formatted_experience_level,
+#             posting.location
+#         ]))
         
-        score = doc_sim_score(resume_embedding, posting_embedding)
+        score = doc_sim_score(resume.text, posting.description)
         scored_postings.append((score, posting.id))
     scored_postings.sort(reverse=True, key=lambda x: x[0])
     scores, ids = zip(*scored_postings)

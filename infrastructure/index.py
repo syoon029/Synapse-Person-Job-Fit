@@ -4,6 +4,12 @@ from .database import get_all_postings, embed_all_postings
 import json
 import time
 
+FAISS_PATH = 'index.faiss'
+
+def set_faiss_path(path):
+    global FAISS_PATH
+    FAISS_PATH = path
+
 def extract_embedding(posting) -> np.ndarray:
     """
     Extract embedding from a posting.
@@ -34,22 +40,22 @@ def init_faiss_index(recompute_embeddings=True) -> None:
     index = faiss.IndexIDMap(faiss.IndexFlatIP(embed_dim))
     index.add_with_ids(embeddings, ids)
 
-    with open('index.faiss', 'w'):
-        faiss.write_index(index, 'index.faiss')
+    with open(FAISS_PATH, 'w'):
+        faiss.write_index(index, FAISS_PATH)
 
 def search_faiss(search_vector, k=5) -> tuple[np.ndarray, np.ndarray]:
     """
     FAISS SEARCH
     """
-    print("[DEBUG] Loading index.faiss...")
+#     print("[DEBUG] Loading index.faiss...")
     t0 = time.time()
     
-    with open('index.faiss', 'r'):
-        index = faiss.read_index('index.faiss')
-        print(f"[DEBUG] Index loaded in {time.time() - t0:.3f}s")
+    with open(FAISS_PATH, 'r'):
+        index = faiss.read_index(FAISS_PATH)
+#         print(f"[DEBUG] Index loaded in {time.time() - t0:.3f}s")
 
-    print("[DEBUG] Starting FAISS search...")
+#     print("[DEBUG] Starting FAISS search...")
 
     scores, ids = index.search(np.array(search_vector, dtype='float32').reshape(1, -1), k)
-    print(f"[DEBUG] Search done in {time.time() - t0:.3f}s")
+#     print(f"[DEBUG] Search done in {time.time() - t0:.3f}s")
     return scores, ids

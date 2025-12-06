@@ -1,4 +1,5 @@
 import os
+from tqdm import tqdm
 from sqlalchemy import create_engine, Column, Integer, String, Float, Text 
 from sqlalchemy.orm import sessionmaker, Session, declarative_base
 from embeddings.embed import embed_posting
@@ -9,6 +10,9 @@ DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///postings.db")
 FAISS_INDEX_PATH = os.path.join(os.path.dirname(__file__), "faiss_index.index")
 
 Base = declarative_base()
+
+engine = None
+Session = None
 
 
 class Posting(Base):
@@ -177,11 +181,25 @@ def import_postings_from_csv(csv_path: str = "linkedin_data/postings.csv", commi
     finally:
         sess.close()
     
-engine = create_engine(DATABASE_URL)
-Session = sessionmaker(bind=engine)
+
 
 def init_db():
     Base.metadata.create_all(engine)
+    
+def update_db():
+    # change the current table by changing the DATABASE_URL environment variable and then calling this function
+    global Session, engine, DATABASE_URL
+    DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///postings.db")
+    engine = create_engine(DATABASE_URL)
+    Session = sessionmaker(bind=engine)
+    init_db()
+    
+def delete_all_postings():
+    session = Session()
+    session.query(Posting).delete()
+    session.commit()
+    session.close()
+#     Posting.__table__.drop(engine)
 
 def add_posting(posting : Posting):
     session = Session()
@@ -216,6 +234,8 @@ def embed_all_postings(batch_size: int = 100, commit_every: int = 50):
     try:
         # Process posts that don't have embeddings yet
         processed = 0
+        count = session.query(Posting).count()
+        
         while True:
             # Get a batch of posts without embeddings
             posts = (
@@ -240,7 +260,7 @@ def embed_all_postings(batch_size: int = 100, commit_every: int = 50):
                         if processed % commit_every == 0:
                             try:
                                 session.commit()
-                                print(f"Processed {processed} embeddings...")
+#                                 print(f"Processed {processed} embeddings...")
                             except Exception as e:
                                 print(f"Warning: commit failed at {processed}: {e}")
                                 session.rollback()
@@ -254,6 +274,8 @@ def embed_all_postings(batch_size: int = 100, commit_every: int = 50):
             except Exception as e:
                 print(f"Warning: final commit failed: {e}")
                 session.rollback()
+            if processed % 10000 == 0:
+                print(f'Processed {processed}')
 
         print(f"Finished! Processed {processed} embeddings total.")
         return processed
@@ -619,3 +641,6 @@ def update_llm_scores(resume_id: int, candidate_ids: list[int], llm_scores: list
         print(f"[ERROR] update_llm_scores({resume_id}): {e}")
     finally:
         session.close()
+
+        
+update_db()

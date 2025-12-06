@@ -11,6 +11,7 @@ CACHE_FILE = 'llm_pairwise_cache.json'
 
 def load_cache() -> Dict[str, Any]:
     """Loads the LLM pairwise comparison cache from disk if it exists."""
+    
     if os.path.exists(CACHE_FILE):
         try:
             with open(CACHE_FILE, 'r') as f:
@@ -92,6 +93,7 @@ Your JSON response:
 
     # 4. Call the LLM
     model_to_use = "models/gemini-2.0-flash"
+#     model_to_use = 'models/gemini-2.5-flash-lite-preview-09-2025'
     response_str = get_response(model_to_use, prompt, max_tokens=256, temperature=0.0)
     
     # 5. Rate limiting delay

@@ -554,7 +554,7 @@ def load_model(model: nn.Module, save_path: str, strict: bool=True):
     save_path: Path as string to the model (.pth)
     strict: Whether to strictly load weights (kwarg for load_state_dict)
     '''
-    checkpoint = torch.load(save_path, weights_only=True)
+    checkpoint = torch.load(save_path, weights_only=True, map_location='cpu')
     model.load_state_dict(checkpoint['model_state_dict'], strict=strict)
     return model
 
